@@ -67,6 +67,186 @@
   .identity-picker select:focus {
     outline: 0; border-color: var(--hero-red);
   }
+  .identity-picker.needs-attention {
+    animation: identity-pulse 1.2s ease-in-out 3;
+    background: rgba(217,36,41,0.15);
+    padding: 4px 10px;
+    border-radius: 6px;
+  }
+  @keyframes identity-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(217,36,41,0); }
+    50%      { box-shadow: 0 0 0 6px rgba(217,36,41,0.35); }
+  }
+  /* Phase 3: Tab nav underneath the header */
+  .tab-nav {
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex;
+    gap: 4px;
+  }
+  .tab-nav button {
+    padding: 12px 16px; background: transparent;
+    border: 0; border-bottom: 2px solid transparent;
+    cursor: pointer; font-family: inherit;
+    font-size: 13px; font-weight: 600;
+    color: var(--text-muted);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .tab-nav button:hover { color: var(--hero-black); }
+  .tab-nav button.on {
+    color: var(--hero-red);
+    border-bottom-color: var(--hero-red);
+  }
+  .tab-nav .tab-count {
+    background: var(--border); color: var(--text-muted);
+    font-size: 11px; padding: 1px 8px; border-radius: 999px;
+    font-weight: 700;
+  }
+  .tab-nav button.on .tab-count {
+    background: var(--hero-red); color: #fff;
+  }
+  /* Focus-tab layout */
+  .focus-header {
+    display: flex; justify-content: space-between;
+    align-items: flex-start; gap: 24px; margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .focus-title {
+    font-family: Georgia, serif; font-size: 28px; font-weight: 500;
+    color: var(--hero-black); margin: 0;
+  }
+  .focus-subtitle {
+    color: var(--text-muted); font-size: 13px; margin-top: 4px;
+  }
+  .focus-stats {
+    display: flex; gap: 10px; flex-wrap: wrap;
+  }
+  .focus-stat {
+    background: #fff; border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 14px; min-width: 100px;
+  }
+  .focus-stat.priority {
+    background: rgba(217,36,41,0.08);
+    border-color: rgba(217,36,41,0.35);
+  }
+  .focus-stat .stat-label {
+    font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--text-muted);
+    font-weight: 600;
+  }
+  .focus-stat .stat-value {
+    font-size: 22px; font-weight: 600; color: var(--hero-black);
+    line-height: 1.1; margin-top: 2px;
+  }
+  .focus-stat.priority .stat-value { color: var(--hero-red); }
+  /* Today section */
+  .today-strip {
+    background: #FFF7E6;
+    border: 2px solid var(--hero-red);
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin-bottom: 24px;
+  }
+  .today-strip.empty {
+    background: #F5F6F8;
+    border-color: var(--border);
+    border-style: dashed;
+    border-width: 1px;
+    color: var(--text-muted);
+    font-size: 13px;
+    padding: 20px;
+    text-align: center;
+  }
+  .today-strip .today-head {
+    font-family: Georgia, serif; font-size: 17px; font-weight: 600;
+    color: var(--hero-black); margin-bottom: 10px;
+  }
+  .today-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 0; border-top: 1px solid rgba(217,36,41,0.15);
+  }
+  .today-item:first-of-type { border-top: 0; }
+  .today-item .today-name { font-weight: 600; color: var(--hero-black); flex: 1; }
+  .today-item .today-chip {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;
+    background: var(--hero-red); color: #fff;
+    padding: 2px 8px; border-radius: 999px;
+    font-weight: 700;
+  }
+  .today-item .today-ctx { font-size: 12px; color: var(--text-muted); }
+  /* Section headings */
+  .section-head {
+    font-family: Georgia, serif; font-size: 18px; font-weight: 500;
+    color: var(--hero-black); margin: 28px 0 10px;
+  }
+  .section-head:first-child { margin-top: 0; }
+  .section-help {
+    color: var(--text-muted); font-size: 12px; margin-bottom: 12px;
+  }
+  /* Week calendar */
+  .week-cal {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    gap: 4px; margin-bottom: 24px;
+    background: #fff; border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px;
+  }
+  .week-day {
+    min-height: 96px;
+    padding: 6px 8px;
+    background: #F9FAFB; border-radius: 4px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .week-day.today { background: rgba(217,36,41,0.06); border: 1px solid rgba(217,36,41,0.3); }
+  .week-day .day-head {
+    font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--text-muted);
+    font-weight: 700;
+  }
+  .week-day.today .day-head { color: var(--hero-red); }
+  .week-day .day-num {
+    font-family: Georgia, serif; font-size: 14px;
+    color: var(--hero-black); font-weight: 500;
+    margin-bottom: 2px;
+  }
+  .cal-chip {
+    font-size: 11px; padding: 4px 6px;
+    border-radius: 3px; cursor: pointer;
+    background: var(--hero-black); color: #fff;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    line-height: 1.3;
+  }
+  .cal-chip.urgent { background: var(--hero-red); }
+  .cal-chip.call   { background: var(--slate); }
+  .cal-chip.info   { background: #E4E7EB; color: var(--text-muted); }
+  .cal-chip:hover { opacity: 0.85; }
+  /* Group list rows (categorized customer lists) */
+  .group-row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 10px 14px; background: #fff;
+    border: 1px solid var(--border); border-radius: 6px;
+    margin-bottom: 6px; cursor: pointer;
+  }
+  .group-row:hover { box-shadow: 0 2px 8px rgba(23,30,38,0.06); }
+  .group-row .grow-name {
+    font-family: Georgia, serif; font-size: 15px; font-weight: 600;
+    color: var(--hero-black); min-width: 140px;
+  }
+  .group-row .grow-meta {
+    color: var(--text-muted); font-size: 12px; flex: 1;
+  }
+  .group-row .grow-due {
+    font-size: 12px; color: var(--text); font-weight: 600;
+    min-width: 100px; text-align: right;
+  }
+  .group-row .grow-cta {
+    color: var(--hero-red); font-size: 12px; font-weight: 600;
+    min-width: 68px; text-align: right;
+  }
+  .group-empty {
+    color: var(--text-muted); font-style: italic;
+    font-size: 13px; padding: 12px 0;
+  }
   /* Identity prompt modal */
   .id-modal-scrim {
     position: fixed; inset: 0;
@@ -455,6 +635,23 @@
     border-radius: 6px;
     margin-top: 8px;
   }
+  /* Phase 3 fold-in warnings */
+  .pitch-warn {
+    background: #FFF3CD;
+    border: 1px solid #F1B860;
+    border-left: 4px solid var(--hero-red);
+    color: #664100;
+    padding: 10px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    margin-bottom: 14px;
+    line-height: 1.4;
+  }
+  .pitch-warn strong { color: var(--hero-red); }
+  .form-textarea.notes-required, .form-input.notes-required {
+    border-color: var(--hero-red);
+    box-shadow: 0 0 0 3px rgba(217,36,41,0.12);
+  }
   .toast {
     position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
     background: var(--hero-black); color: #fff;
@@ -497,8 +694,8 @@
   <div>
     <h1>Hero Cleaners — Customer Pipeline</h1>
     <div class="subtitle">
-      Phase 2b · Halee + Jaylee interactive · click any card to log an action ·
-      generated 2026-07-14T18:01:52.177419 · snapshot date 2026-07-14 ·
+      Phase 3 · focus tabs · Halee + Jaylee interactive · click any card to log an action ·
+      generated 2026-07-14T18:43:27.927865 · snapshot date 2026-07-14 ·
       <a href="https://camsmith126.github.io/hero-cleaners-residential-dashboard/" style="color:#C5CBD3">← residential dashboard</a>
     </div>
   </div>
@@ -524,7 +721,13 @@
   </div>
 </div>
 
-<div class="kpi-strip">
+<nav class="tab-nav" role="tablist" aria-label="Pipeline view">
+  <button type="button" role="tab" data-tab="all"    id="tabBtnAll">All customers <span class="tab-count">217</span></button>
+  <button type="button" role="tab" data-tab="halee"  id="tabBtnHalee">Halee <span class="tab-count">57</span></button>
+  <button type="button" role="tab" data-tab="jaylee" id="tabBtnJaylee">Jaylee <span class="tab-count">30</span></button>
+</nav>
+
+<div class="kpi-strip" id="kpiStrip">
   <div class="kpi"><div class="label">Total customers</div><div class="value">217</div></div>
   <div class="kpi done-green"><div class="label">In active pipeline</div><div class="value">89</div></div>
   <div class="kpi hero-red"><div class="label">Awaiting Jaylee</div><div class="value">30</div></div>
@@ -534,16 +737,17 @@
 
 <main>
   
-  <div class="banner-caption">
-    <strong>Phase 2b — Halee + Jaylee interactive.</strong> Click any card to
-    open the detail panel. Cards at <em>stage 2</em> show Jaylee's onboarding
-    call form; <em>stage 5</em> shows the recurring pitch form (3-attempt
-    tracker + Won/Lost outcomes); <em>stages 8 &amp; 9</em> show Halee's
-    check-in forms. Card state advances on the next daily pipeline run after
-    saving — no browser refresh does it.
-  </div>
 
-  
+  <!-- All customers tab (default Phase 1-2 view) -->
+  <div id="tabPanelAll" class="tab-panel" role="tabpanel">
+    <div class="banner-caption">
+      <strong>Phase 3 — Focus tabs live.</strong> Halee + Jaylee each have
+      their own view above (defaulted to their identity). This <em>All
+      customers</em> view is Cam's cross-team overview: every card, sorted by
+      priority. Click any card to open the detail panel. Card state advances
+      on the next daily pipeline run after saving — no browser refresh does it.
+    </div>
+    
     <div class="card" role="button" tabindex="0" data-customer-id="name::abel beland">
       <div class="card-header">
         <div class="card-name">abel beland</div>
@@ -3147,11 +3351,18 @@
       </div>
     </div>
     
+  </div>
+
+  <!-- Halee's focus tab (rendered client-side from CUSTOMERS array) -->
+  <div id="tabPanelHalee"  class="tab-panel" role="tabpanel" hidden></div>
+
+  <!-- Jaylee's focus tab -->
+  <div id="tabPanelJaylee" class="tab-panel" role="tabpanel" hidden></div>
 
 </main>
 
 <footer>
-  Hero Cleaners · Customer Pipeline · Phase 2b (2026-07-14) · Residential Agent
+  Hero Cleaners · Customer Pipeline · Phase 3 (2026-07-14) · Residential Agent
 </footer>
 
 <!-- ============ Detail panel (Phase 2a) ============ -->
@@ -3230,9 +3441,25 @@
   }
   function setIdentity(v) {
     if (!VALID_IDS[v]) return;
+    const priorHadTab = false;   // computed below — must read before write
+    let hadStoredTab = false;
+    try { hadStoredTab = !!localStorage.getItem(TAB_KEY); } catch (_) {}
     try { localStorage.setItem(IDENTITY_KEY, v); } catch (_) {}
     const sel = document.getElementById('identitySelect');
     if (sel) sel.value = v;
+    // Phase 3: if the operator changes their identity and hasn't
+    // deliberately picked a tab this session, jump to that identity's
+    // default tab. If they DID pick a tab, respect it — but we still
+    // re-render to refresh the tab bar's highlight and (later) any
+    // identity-aware content.
+    if (typeof renderTab === 'function') {
+      // If no tab has ever been stored, switch to identity's default
+      // by clearing the local override — currentTab will fall through.
+      if (!hadStoredTab) {
+        try { localStorage.removeItem(TAB_KEY); } catch (_) {}
+      }
+      renderTab();
+    }
   }
   (function initIdentity(){
     const existing = currentIdentity();
@@ -3256,11 +3483,366 @@
   })();
 
   function loggedBy() {
-    // Fall back to 'unknown' rather than crashing — pipeline reruns can
-    // then surface a metric ("N actions logged with no identity") if
-    // this ever happens, but a missing identity should never block a save.
+    // Phase 3: 'unknown' is the pre-save-guard sentinel — the save path
+    // now blocks entirely when identity is unset (see requireIdentity()).
+    // This helper still returns something safe for any code that reads it
+    // outside a save handler.
     return currentIdentity() || 'unknown';
   }
+
+  function requireIdentity() {
+    // Phase 3 fold-in: block writes when no identity is set. Called from
+    // every doSave path so provenance is never `unknown` in production.
+    // Also highlights the top-right selector so the user knows where to go.
+    if (currentIdentity()) return true;
+    const wrap = document.querySelector('.identity-picker');
+    if (wrap) {
+      wrap.classList.add('needs-attention');
+      // Auto-clear the pulse after 4s so it doesn't loop forever if left on screen.
+      setTimeout(function(){ wrap.classList.remove('needs-attention'); }, 4200);
+    }
+    return false;
+  }
+
+  // ---- Phase 3: Tab nav (All customers / Halee / Jaylee) ----
+  const TAB_KEY = 'hc:pipeline:v1:tab';
+  const VALID_TABS = {all:1, halee:1, jaylee:1};
+
+  function currentTab() {
+    try {
+      const v = localStorage.getItem(TAB_KEY);
+      if (v && VALID_TABS[v]) return v;
+    } catch (_) {}
+    // Default: match identity if it maps to a focus tab; otherwise "all".
+    const id = currentIdentity();
+    if (id === 'halee' || id === 'jaylee') return id;
+    return 'all';
+  }
+  function setTab(t) {
+    if (!VALID_TABS[t]) return;
+    try { localStorage.setItem(TAB_KEY, t); } catch (_) {}
+    renderTab();
+  }
+
+  function renderTab() {
+    const t = currentTab();
+    // Toggle button "on" state
+    document.querySelectorAll('.tab-nav button').forEach(function(btn){
+      btn.classList.toggle('on', btn.getAttribute('data-tab') === t);
+    });
+    // Show/hide panels
+    document.getElementById('tabPanelAll'   ).hidden = (t !== 'all');
+    document.getElementById('tabPanelHalee' ).hidden = (t !== 'halee');
+    document.getElementById('tabPanelJaylee').hidden = (t !== 'jaylee');
+    // Hide the top KPI strip on focus tabs (each tab has its own stats)
+    document.getElementById('kpiStrip').style.display = (t === 'all' ? '' : 'none');
+    if (t === 'halee')  renderFocusTab('halee',  document.getElementById('tabPanelHalee'));
+    if (t === 'jaylee') renderFocusTab('jaylee', document.getElementById('tabPanelJaylee'));
+  }
+
+  document.querySelectorAll('.tab-nav button').forEach(function(btn){
+    btn.addEventListener('click', function(){ setTab(btn.getAttribute('data-tab')); });
+  });
+
+  // ---- Focus-tab date helpers ----
+  function todayDate()   { return new Date(new Date().toDateString()); }
+  function isoOf(d)      { return d.toISOString().slice(0,10); }
+  function daysBetween(a, b) {
+    return Math.round((a - b) / 86400000);
+  }
+  function parseIsoDate(iso) {
+    if (!iso) return null;
+    const d = new Date(String(iso).slice(0,10) + 'T00:00:00');
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function weekStart(d) {
+    // Monday-anchored. JavaScript's getDay is Sun=0..Sat=6.
+    const w = new Date(d);
+    const dow = w.getDay();
+    const back = dow === 0 ? 6 : dow - 1;
+    w.setDate(w.getDate() - back);
+    w.setHours(0,0,0,0);
+    return w;
+  }
+  function weekDays(start) {
+    return Array.from({length: 7}, function(_, i){
+      const d = new Date(start); d.setDate(d.getDate() + i); return d;
+    });
+  }
+  function fmtDayHead(d) {
+    return d.toLocaleDateString(undefined, {weekday: 'short'}).toUpperCase();
+  }
+  function fmtDayNum(d)  { return d.getDate(); }
+  function fmtHumanDate(d) {
+    return d.toLocaleDateString(undefined, {weekday:'long', month:'long', day:'numeric'});
+  }
+
+  // ---- Filtering: which customers belong to which focus tab ----
+  function haleeCustomers() {
+    // Stage 8 (First check-in due) or 9 (Second check-in due). Owner is
+    // reliably 'halee' for these — filter on both for defense in depth.
+    return CUSTOMERS.filter(function(c){
+      const ps = c.pipeline_stage || {};
+      const cs = ps.current_stage;
+      return (cs === 8 || cs === 9) && ps.next_action_owner === 'halee';
+    });
+  }
+  function jayleeCustomers() {
+    return CUSTOMERS.filter(function(c){
+      const ps = c.pipeline_stage || {};
+      const cs = ps.current_stage;
+      // Stage 2 (Onboarding call), stage 5 (Recurring pitch). Explicit
+      // Lost also lands in Jaylee's world (owner_lost) but the brief
+      // scopes her focus to pipeline actions, not lost follow-up.
+      return (cs === 2 || cs === 5) && ps.next_action_owner === 'jaylee';
+    });
+  }
+
+  // Best-guess "when the next action is due" for a customer in the focus
+  // tab. Halee: uses next_scheduled (first recurring for stage 8, next
+  // recurring after 30d for stage 9). Jaylee: onboarding = first_visit
+  // date; pitch = first_visit + 48h; falls back to today+7 as a bucket.
+  function actionDueDate(c) {
+    const ps = c.pipeline_stage || {};
+    const cs = ps.current_stage;
+    let base = null;
+    if (cs === 8) {
+      base = parseIsoDate(c.next_scheduled) || parseIsoDate(c.first_rec_visit);
+    } else if (cs === 9) {
+      base = parseIsoDate(c.next_scheduled);
+    } else if (cs === 2) {
+      base = parseIsoDate(c.next_scheduled) || parseIsoDate(c.first_visit);
+    } else if (cs === 5) {
+      const fv = parseIsoDate(c.first_visit);
+      if (fv) { base = new Date(fv); base.setDate(base.getDate() + 2); }
+    }
+    return base;
+  }
+
+  function chipKindFor(cs, isToday) {
+    if (isToday) return 'urgent';
+    if (cs === 9 || cs === 2 || cs === 5) return 'call';   // phone actions
+    return '';   // Halee's stage-8 first check-in visit → default ink black
+  }
+  function shortLabelFor(c, cs) {
+    if (cs === 8) return 'First check-in · ' + (c.display_name || '');
+    if (cs === 9) return 'Second check-in · ' + (c.display_name || '');
+    if (cs === 2) return 'Onboarding call · ' + (c.display_name || '');
+    if (cs === 5) return 'Recurring pitch · ' + (c.display_name || '');
+    return c.display_name || '';
+  }
+
+  // ---- Focus tab renderer (Halee + Jaylee share the same shape) ----
+  function renderFocusTab(who, container) {
+    const custs = (who === 'halee' ? haleeCustomers() : jayleeCustomers());
+    const today = todayDate();
+    const wkStart = weekStart(today);
+    const days = weekDays(wkStart);
+    const wkEnd = new Date(wkStart); wkEnd.setDate(wkEnd.getDate() + 6);
+
+    // Bucket customers by day within this week (Mon..Sun).
+    const byDay = days.map(function(){ return []; });
+    const todayList = [];
+    const overdue = [];   // due before this week or actionDueDate is null but stage current
+    custs.forEach(function(c){
+      const due = actionDueDate(c);
+      if (!due) {
+        overdue.push(c);
+        return;
+      }
+      if (due < wkStart) {
+        overdue.push(c);
+      } else if (due <= wkEnd) {
+        const idx = daysBetween(due, wkStart);
+        byDay[idx].push(c);
+        if (isoOf(due) === isoOf(today)) todayList.push(c);
+      }
+    });
+
+    // Stat cards — differ per identity per brief.
+    let statsHtml = '';
+    if (who === 'halee') {
+      const s8 = custs.filter(function(c){
+        const ps = c.pipeline_stage || {};
+        const due = actionDueDate(c);
+        return ps.current_stage === 8 && due && due >= wkStart && due <= wkEnd;
+      }).length;
+      const s9 = custs.filter(function(c){
+        const ps = c.pipeline_stage || {};
+        const due = actionDueDate(c);
+        return ps.current_stage === 9 && due && due >= wkStart && due <= wkEnd;
+      }).length;
+      statsHtml = statCards([
+        ['Today',             todayList.length + overdue.length, true],
+        ['First check-ins',   s8, false],
+        ['Second check-ins',  s9, false]
+      ]);
+    } else {
+      const s2 = custs.filter(function(c){
+        const ps = c.pipeline_stage || {};
+        const due = actionDueDate(c);
+        return ps.current_stage === 2 && due && due >= wkStart && due <= wkEnd;
+      }).length;
+      const s5 = custs.filter(function(c){
+        const ps = c.pipeline_stage || {};
+        return ps.current_stage === 5;
+      }).length;
+      // Won this month = customers whose pipeline_actions include a
+      // recurring_pitch_won logged in the current calendar month. This
+      // reads from the embedded actions (populated by the daily pipeline).
+      const monthStart = new Date(today); monthStart.setDate(1);
+      const wonThisMonth = CUSTOMERS.filter(function(c){
+        return (c.pipeline_actions || []).some(function(a){
+          if (a.stage_name !== 'recurring_pitch_won') return false;
+          const d = a.logged_at ? new Date(a.logged_at) : null;
+          return d && d >= monthStart;
+        });
+      }).length;
+      statsHtml = statCards([
+        ['Today',             todayList.length + overdue.length, true],
+        ['Onboarding calls',  s2, false],
+        ['Recurring pitches', s5, false],
+        ['Won this month',    wonThisMonth, false]
+      ]);
+    }
+
+    // Today strip
+    const todayStripItems = todayList.concat(overdue);
+    const todayHtml = todayStripItems.length
+      ? ('<div class="today-strip"><div class="today-head">What needs you now — ' + esc(fmtHumanDate(today)) + '</div>' +
+         todayStripItems.map(function(c){
+           const cs = (c.pipeline_stage || {}).current_stage;
+           const chipLabel =
+             cs === 8 ? 'First check-in visit' :
+             cs === 9 ? 'Second check-in call' :
+             cs === 2 ? 'Onboarding call' :
+             cs === 5 ? 'Recurring pitch' : 'Action';
+           const due = actionDueDate(c);
+           const overdueTag = (due && due < today) ? ' · <strong style="color:var(--hero-red)">overdue</strong>' : '';
+           const ctx = (c.frequency ? esc(c.frequency) : (c.state ? esc(c.state) : '')) + overdueTag;
+           return '<div class="today-item" data-open-cid="' + esc(c.customer_id) + '">' +
+             '<span class="today-name">' + esc(c.display_name || '') + '</span>' +
+             '<span class="today-chip">' + esc(chipLabel) + '</span>' +
+             '<span class="today-ctx">' + ctx + '</span>' +
+             '<span class="grow-cta">Open panel →</span>' +
+           '</div>';
+         }).join('') + '</div>')
+      : '<div class="today-strip empty">Nothing on your plate today. 🎉 Scroll to see the week ahead.</div>';
+
+    // Week calendar
+    const weekHtml =
+      '<h3 class="section-head">This week — your calendar</h3>' +
+      '<div class="week-cal">' +
+        days.map(function(d, i){
+          const isToday = isoOf(d) === isoOf(today);
+          const chips = byDay[i].map(function(c){
+            const cs = (c.pipeline_stage || {}).current_stage;
+            const kind = chipKindFor(cs, isToday);
+            return '<div class="cal-chip ' + kind + '" data-open-cid="' + esc(c.customer_id) + '" ' +
+                   'title="' + esc(shortLabelFor(c, cs)) + '">' +
+                   esc(shortLabelFor(c, cs)) + '</div>';
+          }).join('');
+          return '<div class="week-day' + (isToday ? ' today' : '') + '">' +
+            '<div class="day-head">' + esc(fmtDayHead(d)) + '</div>' +
+            '<div class="day-num">' + fmtDayNum(d) + '</div>' +
+            chips +
+          '</div>';
+        }).join('') +
+      '</div>';
+
+    // Grouped lists
+    let groupsHtml = '';
+    if (who === 'halee') {
+      const g8 = custs.filter(function(c){ return (c.pipeline_stage || {}).current_stage === 8; });
+      const g9 = custs.filter(function(c){ return (c.pipeline_stage || {}).current_stage === 9; });
+      groupsHtml =
+        '<h3 class="section-head">First check-in visits <span class="tab-count">' + g8.length + '</span></h3>' +
+        renderGroupList(g8, today) +
+        '<h3 class="section-head">Second check-in calls <span class="tab-count">' + g9.length + '</span></h3>' +
+        renderGroupList(g9, today);
+    } else {
+      const g5 = custs.filter(function(c){ return (c.pipeline_stage || {}).current_stage === 5; })
+        .sort(function(a,b){
+          const da = actionDueDate(a), db = actionDueDate(b);
+          return (da ? da.getTime() : Infinity) - (db ? db.getTime() : Infinity);
+        });
+      const g2 = custs.filter(function(c){ return (c.pipeline_stage || {}).current_stage === 2; })
+        .sort(function(a,b){
+          const da = actionDueDate(a), db = actionDueDate(b);
+          return (da ? da.getTime() : Infinity) - (db ? db.getTime() : Infinity);
+        });
+      groupsHtml =
+        '<h3 class="section-head">Recurring pitches <span class="tab-count">' + g5.length + '</span></h3>' +
+        '<div class="section-help">Ordered by pitch-due date (first clean + 48h).</div>' +
+        renderGroupList(g5, today) +
+        '<h3 class="section-head">Onboarding calls <span class="tab-count">' + g2.length + '</span></h3>' +
+        '<div class="section-help">Ordered by first-clean date.</div>' +
+        renderGroupList(g2, today);
+    }
+
+    const titleText = who === 'halee' ? "Halee's focus" : "Jaylee's focus";
+    container.innerHTML =
+      '<div class="focus-header">' +
+        '<div>' +
+          '<h2 class="focus-title">' + esc(titleText) + '</h2>' +
+          '<div class="focus-subtitle">' + esc(fmtHumanDate(today)) + ' — everything that needs your attention this week.</div>' +
+        '</div>' +
+        '<div class="focus-stats">' + statsHtml + '</div>' +
+      '</div>' +
+      todayHtml +
+      weekHtml +
+      groupsHtml;
+
+    // Wire up "open panel" affordances (calendar chips + today items + row CTAs)
+    container.querySelectorAll('[data-open-cid]').forEach(function(el){
+      el.addEventListener('click', function(ev){
+        ev.stopPropagation();
+        openPanel(el.getAttribute('data-open-cid'));
+      });
+    });
+  }
+
+  function statCards(rows) {
+    return rows.map(function(r){
+      return '<div class="focus-stat' + (r[2] ? ' priority' : '') + '">' +
+        '<div class="stat-label">' + esc(r[0]) + '</div>' +
+        '<div class="stat-value">' + r[1] + '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function renderGroupList(rows, today) {
+    if (!rows.length) return '<div class="group-empty">Nothing here this week.</div>';
+    return rows.map(function(c){
+      const cs = (c.pipeline_stage || {}).current_stage;
+      const cleaner = Array.isArray(c.first_visit_cleaners)
+        ? c.first_visit_cleaners.filter(Boolean).join(', ')
+        : (c.first_visit_cleaners || '');
+      const meta = [c.frequency || c.state, cleaner ? ('cleaner: ' + cleaner) : '']
+        .filter(Boolean).join(' · ');
+      const due = actionDueDate(c);
+      let dueStr = '—';
+      if (due) {
+        const days = daysBetween(due, today);
+        if (days === 0)      dueStr = 'today';
+        else if (days === 1) dueStr = 'tomorrow';
+        else if (days === -1) dueStr = 'yesterday';
+        else if (days < 0)    dueStr = Math.abs(days) + 'd overdue';
+        else                  dueStr = 'in ' + days + 'd';
+      }
+      return '<div class="group-row" data-open-cid="' + esc(c.customer_id) + '">' +
+        '<span class="grow-name">' + esc(c.display_name || '') + '</span>' +
+        '<span class="grow-meta">' + esc(meta) + '</span>' +
+        '<span class="grow-due">' + esc(dueStr) + '</span>' +
+        '<span class="grow-cta">Details →</span>' +
+      '</div>';
+    }).join('');
+  }
+
+  // Initial tab render — defer until after all form/panel wiring is set up.
+  // The DOM elements exist above, but openPanel etc. need to be defined
+  // (they are — this whole IIFE runs synchronously).
+  renderTab();
 
   // ---- Panel state + open/close ----
   const scrim   = document.getElementById('panelScrim');
@@ -3719,14 +4301,29 @@
 
     const attemptsClosed = (priors.length >= 3);
 
+    // Phase 3 fold-in: hard warning after 3 attempts. The tracker naturally
+    // stops rendering a 4th row, but we need a visible instruction telling
+    // Jaylee that a text (logged as an outcome, not a 4th attempt) is the
+    // right next step per the 3-call rule.
+    const threeCallWarning = attemptsClosed
+      ? '<div class="pitch-warn">' +
+          '<strong>You\'ve hit the 3-call rule.</strong> A text is the next step ' +
+          'per protocol — don\'t log a 4th call. If you texted and she responded, ' +
+          'pick <em>Reached &amp; pitched</em> + a Result. If you texted and got ' +
+          'no reply, pick <em>Left VM / text</em> + Result = Pending response (or ' +
+          'Lost — unreachable if this closes the file).' +
+        '</div>'
+      : '';
+
     return (
       '<div id="checkinFormError" class="form-error" style="display:none"></div>' +
+      threeCallWarning +
 
       '<div class="section-label">Call attempts</div>' +
       '<div class="pitch-tracker">' + trackerRows + '</div>' +
 
       '<div class="section-label">Outcome (this attempt)</div>' +
-      '<div class="form-group" id="pitchOutcomeWrap"' + (attemptsClosed ? ' style="opacity:0.4;pointer-events:none"' : '') + '>' +
+      '<div class="form-group" id="pitchOutcomeWrap">' +
         segmented('attempt_outcome',
           [['reached_and_pitched','Reached & pitched'],['left_vm_or_text','Left VM / text']], '') +
       '</div>' +
@@ -3774,8 +4371,9 @@
       '</div>' +
 
       '<div class="section-label">Notes</div>' +
-      '<div class="form-group">' +
-        '<textarea class="form-textarea" data-field="notes" placeholder="What she said, red flags, price objections, timing issues, whatever you want future-Jaylee (or the classifier) to know"></textarea>' +
+      '<div class="form-group" id="pitchNotesGroup">' +
+        '<textarea id="pitchNotesField" class="form-textarea" data-field="notes" placeholder="What she said, red flags, price objections, timing issues, whatever you want future-Jaylee (or the classifier) to know"></textarea>' +
+        '<div class="form-help" id="pitchNotesHelp" style="display:none">Notes required (≥ 10 chars) when no call attempt was logged — briefly explain how this outcome came about.</div>' +
       '</div>'
     );
   }
@@ -3843,11 +4441,17 @@
         });
       });
     });
-    // Text inputs / textareas / selects
+    // Text inputs / textareas / selects.
+    // Call refreshSaveButton + refreshPitchUI directly so behavior is
+    // correct even when the caller dispatches non-bubbling synthetic
+    // events (real user input bubbles up to bodyEl and would fire the
+    // container-level listeners below anyway).
     bodyEl.querySelectorAll('[data-field]').forEach(function(el){
       const ev = el.tagName === 'SELECT' ? 'change' : 'input';
       el.addEventListener(ev, function(){
         CURRENT.values[el.getAttribute('data-field')] = el.value;
+        refreshSaveButton();
+        if (CURRENT.formStage === 'pitch') refreshPitchUI();
       });
     });
     // Phase 2b: pitch form — Result controls Won/Lost conditional visibility
@@ -3856,10 +4460,18 @@
     function refreshPitchUI() {
       if (CURRENT.formStage !== 'pitch') return;
       const v = CURRENT.values;
+      const meta = CURRENT.pitchMeta || {priors: []};
       const won  = document.getElementById('pitchWonBlock');
       const lost = document.getElementById('pitchLostBlock');
       if (won)  won.style.display  = (v.result === 'won')  ? '' : 'none';
       if (lost) lost.style.display = (v.result === 'lost') ? '' : 'none';
+      // Phase 3 fold-in: highlight notes when Won/Lost picked with zero prior attempts
+      const notesField = document.getElementById('pitchNotesField');
+      const notesHelp  = document.getElementById('pitchNotesHelp');
+      const needsNotes = (v.result === 'won' || v.result === 'lost')
+                         && meta.priors && meta.priors.length === 0;
+      if (notesField) notesField.classList.toggle('notes-required', !!needsNotes);
+      if (notesHelp)  notesHelp.style.display = needsNotes ? '' : 'none';
       refreshSaveButton();
     }
     bodyEl.querySelectorAll('[data-segmented="result"] button').forEach(function(btn){
@@ -3892,22 +4504,35 @@
       label = 'Save & advance →';
     } else if (CURRENT.formStage === 'pitch') {
       const attemptTouched = (v.attempt_answered !== null) || v.attempt_outcome;
+      const meta = CURRENT.pitchMeta || {nextAttempt: 1, priors: []};
+      const attemptsClosed = (meta.priors && meta.priors.length >= 3);
+      // Phase 3 fold-in: Won/Lost with zero prior attempts require notes
+      // ≥ 10 chars (see form for the highlight caption).
+      const needsNotes = ((v.result === 'won' || v.result === 'lost')
+                         && meta.priors && meta.priors.length === 0);
+      const notesOk = !!(v.notes && v.notes.trim().length >= 10);
+
       if (v.result === 'won') {
         label = 'Save & advance to Won →';
-        enabled = !!v.frequency && !!v.first_recurring_start_date;
+        enabled = !!v.frequency && !!v.first_recurring_start_date
+                  && (!needsNotes || notesOk);
       } else if (v.result === 'lost') {
         label = 'Save & mark Lost →';
-        enabled = !!v.lost_reason;
+        enabled = !!v.lost_reason && (!needsNotes || notesOk);
       } else if (v.result === 'estimate_sent') {
         label = 'Save & mark Estimate sent →';
       } else if (v.result === 'pending_response') {
         label = 'Save & mark Pending →';
-      } else if (attemptTouched) {
-        const meta = CURRENT.pitchMeta || {nextAttempt: 1};
+      } else if (attemptTouched && !attemptsClosed) {
         label = 'Save attempt ' + meta.nextAttempt;
+      } else if (attemptTouched && attemptsClosed) {
+        // 3-call rule hit — an attempt is being clicked but shouldn't be
+        // saved as attempt 4. Force a Result.
+        label = 'Pick a Result — 3-call rule hit';
+        enabled = false;
       } else {
         label = 'Save';
-        enabled = false;  // nothing to save yet
+        enabled = false;
       }
     }
     saveBtn.textContent = label;
@@ -3921,6 +4546,18 @@
     const v = CURRENT.values;
     const errEl = document.getElementById('checkinFormError');
     if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+
+    // Phase 3 fold-in: refuse to save without a picked identity — every
+    // customer_actions row must carry provenance. requireIdentity() also
+    // pulses the top-right selector so the user knows where to fix it.
+    if (!requireIdentity()) {
+      if (errEl) {
+        errEl.textContent = 'Pick who you are first (top-right of the dashboard) before logging actions.';
+        errEl.style.display = 'block';
+      }
+      toast('Pick who you are first — top-right of the dashboard.', true);
+      return;
+    }
 
     CURRENT.saving = true;
     saveBtn.disabled = true;
