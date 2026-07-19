@@ -303,6 +303,7 @@
   }
   .cal-chip.urgent { background: var(--hero-red); }
   .cal-chip.call   { background: var(--slate); }
+  .cal-chip.visit  { background: #7C3AED; }   /* purple — in-person first recurring visit */
   .cal-chip.info   { background: #E4E7EB; color: var(--text-muted); }
   .cal-chip:hover { opacity: 0.85; }
   /* Group list rows (categorized customer lists) */
@@ -3936,13 +3937,20 @@
   // customers are hidden by default so Halee/Jaylee only see the new-process
   // cohort. Flip the cohort toggle at the top to see everyone.
   function haleeCustomers() {
-    // Stage 8 (First check-in due) or 9 (Second check-in due). Owner is
-    // reliably 'halee' for these — filter on both for defense in depth.
+    // Halee 30-day scope (2026-07-18):
+    //   Stage 7 (current) — first recurring visit upcoming; she visits in person
+    //   Stage 8 (current) — first check-in due; she logs met_customer + intro_method
+    //   Stage 9 (current) — second check-in due; she calls to follow up
+    // Stage 7 owner is 'auto' (HCP fires the completion) — we surface it on
+    // Halee's calendar anyway so she can plan the in-person visit before
+    // the visit day, then log the check-in once the visit happens.
     return CUSTOMERS.filter(function(c){
       if (!COHORT.passes(c)) return false;
       const ps = c.pipeline_stage || {};
       const cs = ps.current_stage;
-      return (cs === 8 || cs === 9) && ps.next_action_owner === 'halee';
+      if (cs === 7) return true;
+      if (cs === 8 || cs === 9) return ps.next_action_owner === 'halee';
+      return false;
     });
   }
   function jayleeCustomers() {
@@ -3965,7 +3973,12 @@
     const ps = c.pipeline_stage || {};
     const cs = ps.current_stage;
     let base = null;
-    if (cs === 8) {
+    if (cs === 7) {
+      // First recurring visit — Halee's in-person intro moment.
+      // Fall back to next_scheduled if first_rec_visit not populated yet
+      // (fresh new-recurring customers where the pipeline hasn't tagged it).
+      base = parseIsoDate(c.first_rec_visit) || parseIsoDate(c.next_scheduled);
+    } else if (cs === 8) {
       base = parseIsoDate(c.next_scheduled) || parseIsoDate(c.first_rec_visit);
     } else if (cs === 9) {
       base = parseIsoDate(c.next_scheduled);
@@ -3981,9 +3994,11 @@
   function chipKindFor(cs, isToday) {
     if (isToday) return 'urgent';
     if (cs === 9 || cs === 2 || cs === 5) return 'call';   // phone actions
+    if (cs === 7) return 'visit';                          // in-person visit
     return '';   // Halee's stage-8 first check-in visit → default ink black
   }
   function shortLabelFor(c, cs) {
+    if (cs === 7) return 'First recurring · ' + (c.display_name || '');
     if (cs === 8) return 'First check-in · ' + (c.display_name || '');
     if (cs === 9) return 'Second check-in · ' + (c.display_name || '');
     if (cs === 2) return 'Onboarding call · ' + (c.display_name || '');
@@ -4029,20 +4044,21 @@
     // Halee 2026-07-18: 30-day scope. Jaylee: still weekly.
     let statsHtml = '';
     if (who === 'halee') {
-      const s8 = custs.filter(function(c){
-        const ps = c.pipeline_stage || {};
-        const due = actionDueDate(c);
-        return ps.current_stage === 8 && due && due >= wkStart && due <= windowEnd;
-      }).length;
-      const s9 = custs.filter(function(c){
-        const ps = c.pipeline_stage || {};
-        const due = actionDueDate(c);
-        return ps.current_stage === 9 && due && due >= wkStart && due <= windowEnd;
-      }).length;
+      const inWindow = function(cs) {
+        return custs.filter(function(c){
+          const ps = c.pipeline_stage || {};
+          const due = actionDueDate(c);
+          return ps.current_stage === cs && due && due >= wkStart && due <= windowEnd;
+        }).length;
+      };
+      const s7 = inWindow(7);
+      const s8 = inWindow(8);
+      const s9 = inWindow(9);
       statsHtml = statCards([
-        ['Today',                 todayList.length + overdue.length, true],
-        ['First check-ins (30d)', s8, false],
-        ['Second check-ins (30d)', s9, false]
+        ['Today',                    todayList.length + overdue.length, true],
+        ['First recurring (30d)',    s7, false],
+        ['First check-ins (30d)',    s8, false],
+        ['Second check-ins (30d)',   s9, false]
       ]);
     } else {
       const s2 = custs.filter(function(c){
@@ -4080,6 +4096,7 @@
          todayStripItems.map(function(c){
            const cs = (c.pipeline_stage || {}).current_stage;
            const chipLabel =
+             cs === 7 ? 'First recurring · in-person intro' :
              cs === 8 ? 'First check-in visit' :
              cs === 9 ? 'Second check-in call' :
              cs === 2 ? 'Onboarding call' :
@@ -4161,9 +4178,17 @@
     // Grouped lists
     let groupsHtml = '';
     if (who === 'halee') {
+      const g7 = custs.filter(function(c){ return (c.pipeline_stage || {}).current_stage === 7; })
+        .sort(function(a,b){
+          const da = actionDueDate(a), db = actionDueDate(b);
+          return (da ? da.getTime() : Infinity) - (db ? db.getTime() : Infinity);
+        });
       const g8 = custs.filter(function(c){ return (c.pipeline_stage || {}).current_stage === 8; });
       const g9 = custs.filter(function(c){ return (c.pipeline_stage || {}).current_stage === 9; });
       groupsHtml =
+        '<h3 class="section-head">First recurring visits <span class="tab-count">' + g7.length + '</span></h3>' +
+        '<div class="section-help">Their first-ever recurring clean. Plan an in-person intro at the end of the visit.</div>' +
+        renderGroupList(g7, today) +
         '<h3 class="section-head">First check-in visits <span class="tab-count">' + g8.length + '</span></h3>' +
         renderGroupList(g8, today) +
         '<h3 class="section-head">Second check-in calls <span class="tab-count">' + g9.length + '</span></h3>' +
