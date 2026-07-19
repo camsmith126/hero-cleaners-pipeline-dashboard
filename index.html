@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260719T155956">
+<meta name="hc-build-id" content="20260719T161157">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -309,7 +309,16 @@
   .cal-chip.urgent { background: var(--hero-red); }
   .cal-chip.call   { background: var(--slate); }
   .cal-chip.visit  { background: #7C3AED; }   /* purple — in-person first recurring visit */
-  .cal-chip.newjob { background: #0891B2; }   /* teal — new customer's first-time clean */
+  /* 2026-07-19: color-code first-time cleans by job type so Halee can
+     distinguish Move In/Out (higher urgency, home in flux) from the routine
+     Intro Cleans at a glance. */
+  .cal-chip.newjob        { background: #0891B2; }   /* teal — default / Intro Clean */
+  .cal-chip.newjob-intro  { background: #0891B2; }   /* teal — Intro Clean */
+  .cal-chip.newjob-move   { background: #EA580C; }   /* orange — Move In/Out */
+  .cal-chip.newjob-deep   { background: #059669; }   /* emerald — Deep Clean */
+  .cal-chip.newjob-post   { background: #B45309; }   /* amber — Post-Construction */
+  .cal-chip.newjob-custom { background: #4F46E5; }   /* indigo — Custom Clean */
+  .cal-chip.newjob-one    { background: #6B7280; }   /* gray — One-Time */
   .cal-chip.info   { background: #E4E7EB; color: var(--text-muted); }
   .cal-chip:hover { opacity: 0.85; }
   /* Group list rows (categorized customer lists) */
@@ -4022,14 +4031,32 @@
     return base;
   }
 
-  function chipKindFor(cs, isToday, who) {
+  // Map a job_type name to the color-coded newjob variant. Same string
+  // matching as shortJobTypeLabel (2026-07-19). Falls back to plain
+  // teal 'newjob' when the type is unknown or missing.
+  function newJobKindFor(jt) {
+    if (!jt) return 'newjob';
+    const s = String(jt).toLowerCase();
+    if (s.indexOf('move')   >= 0) return 'newjob-move';
+    if (s.indexOf('deep')   >= 0) return 'newjob-deep';
+    if (s.indexOf('intro')  >= 0) return 'newjob-intro';
+    if (s.indexOf('post')   >= 0) return 'newjob-post';
+    if (s.indexOf('custom') >= 0) return 'newjob-custom';
+    if (s.indexOf('one')    >= 0) return 'newjob-one';
+    return 'newjob';
+  }
+  function chipKindFor(cs, isToday, who, c) {
     if (isToday) return 'urgent';
     // For Halee: stages 1/2/3 = the customer's first-time clean (informational).
-    // For Jaylee: stage 2 = the phone call she owns (blue/gray).
-    if (who === 'halee' && (cs === 1 || cs === 2 || cs === 3)) return 'newjob';
+    // Color-code by job_type so she can distinguish Move In/Out / Deep / Intro / etc.
+    if (who === 'halee' && (cs === 1 || cs === 2 || cs === 3)) {
+      return newJobKindFor(c && (c.next_scheduled_job_type || c.first_visit_job_type));
+    }
     if (cs === 9 || cs === 2 || cs === 5) return 'call';   // phone actions
     if (cs === 7) return 'visit';                          // in-person visit
-    if (cs === 1 || cs === 3) return 'newjob';             // first-time clean (informational)
+    if (cs === 1 || cs === 3) {
+      return newJobKindFor(c && (c.next_scheduled_job_type || c.first_visit_job_type));
+    }
     return '';   // Halee's stage-8 first check-in visit → default ink black
   }
   // Collapse verbose job_types into short labels for calendar chips.
@@ -4204,7 +4231,7 @@
           const isPast = !isToday && d < today;
           const chips = byDay[dayIdx].map(function(c){
             const cs = (c.pipeline_stage || {}).current_stage;
-            const kind = chipKindFor(cs, isToday, who);
+            const kind = chipKindFor(cs, isToday, who, c);
             const label = shortLabelFor(c, cs, who);
             return '<div class="cal-chip ' + kind + '" data-open-cid="' + esc(c.customer_id) + '" ' +
                    'title="' + esc(label) + '">' +
@@ -4233,7 +4260,7 @@
             const isToday = isoOf(d) === isoOf(today);
             const chips = byDay[i].map(function(c){
               const cs = (c.pipeline_stage || {}).current_stage;
-              const kind = chipKindFor(cs, isToday, who);
+              const kind = chipKindFor(cs, isToday, who, c);
               const label = shortLabelFor(c, cs, who);
               return '<div class="cal-chip ' + kind + '" data-open-cid="' + esc(c.customer_id) + '" ' +
                      'title="' + esc(label) + '">' +
