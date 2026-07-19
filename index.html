@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260719T153742">
+<meta name="hc-build-id" content="20260719T154451">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -3693,9 +3693,15 @@
     },
     passes: function(c) {
       if (this.mode === 'all') return true;
-      const fv = (c && c.first_visit) ? String(c.first_visit).slice(0, 10) : '';
-      if (!fv) return false;   // no first visit → historical / partial record; hide
-      return fv >= COHORT_CUTOFF_ISO;
+      if (!c) return false;
+      const fv = c.first_visit ? String(c.first_visit).slice(0, 10) : '';
+      if (fv) return fv >= COHORT_CUTOFF_ISO;   // known first visit: cutoff test
+      // No first_visit yet — brand-new customer whose first clean hasn't
+      // happened. If they have an upcoming visit on the calendar, they're
+      // new-cohort by definition (they entered our funnel post-cutoff, we
+      // just don't have a completed first_visit to check). Only hide the
+      // truly-orphaned records (no history, no future). 2026-07-19 fix.
+      return !!c.next_scheduled;
     }
   };
   COHORT.load();
