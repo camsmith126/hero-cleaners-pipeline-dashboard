@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260719T162241">
+<meta name="hc-build-id" content="20260719T174606">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -117,6 +117,56 @@
   }
   /* When a card is hidden by the cohort filter it just doesn't render */
   .card.filter-hidden { display: none !important; }
+
+  /* 2026-07-19: Customers tab (data view) */
+  .cust-header { padding: 22px 24px 10px; }
+  .cust-subnav {
+    display: flex; gap: 4px;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .cust-subnav button {
+    padding: 10px 14px; background: transparent;
+    border: 0; border-bottom: 2px solid transparent;
+    cursor: pointer; font-family: inherit;
+    font-size: 13px; font-weight: 600;
+    color: var(--text-muted);
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .cust-subnav button:hover { color: var(--hero-black); }
+  .cust-subnav button.on {
+    color: var(--hero-black);
+    border-bottom-color: var(--hero-black);
+  }
+  .cust-subnav .tab-count {
+    background: var(--border); color: var(--text-muted);
+    font-size: 11px; padding: 1px 8px; border-radius: 999px;
+    font-weight: 700;
+  }
+  .cust-subnav button.on .tab-count {
+    background: var(--hero-black); color: #fff;
+  }
+  .cust-list-help {
+    padding: 12px 24px 4px; font-size: 12px; color: var(--text-muted);
+  }
+  .cust-list {
+    padding: 8px 24px 24px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .cust-row {
+    display: grid;
+    grid-template-columns: minmax(160px, 1.4fr) minmax(140px, 1fr) minmax(160px, 1fr) minmax(80px, 0.7fr) auto;
+    gap: 12px; align-items: center;
+    padding: 10px 14px; background: #fff;
+    border: 1px solid var(--border); border-radius: 6px;
+    cursor: pointer; font-size: 13px;
+  }
+  .cust-row:hover { box-shadow: 0 2px 8px rgba(23,30,38,0.06); }
+  .cust-row .cust-name a {
+    font-family: Georgia, serif; font-size: 15px; font-weight: 600;
+    color: var(--hero-black); text-decoration: none;
+  }
+  .cust-row .cust-meta { color: var(--text-muted); font-size: 12px; }
 
   /* Phase 3: Tab nav underneath the header */
   .tab-nav {
@@ -941,9 +991,10 @@
 </div>
 
 <nav class="tab-nav" role="tablist" aria-label="Pipeline view">
-  <button type="button" role="tab" data-tab="all"    id="tabBtnAll">All customers <span class="tab-count" id="tabCountAll">222</span></button>
-  <button type="button" role="tab" data-tab="halee"  id="tabBtnHalee">Halee <span class="tab-count" id="tabCountHalee">46</span></button>
-  <button type="button" role="tab" data-tab="jaylee" id="tabBtnJaylee">Jaylee <span class="tab-count" id="tabCountJaylee">31</span></button>
+  <button type="button" role="tab" data-tab="all"       id="tabBtnAll">Pipeline <span class="tab-count" id="tabCountAll">222</span></button>
+  <button type="button" role="tab" data-tab="customers" id="tabBtnCustomers">Customers <span class="tab-count" id="tabCountCustomers"></span></button>
+  <button type="button" role="tab" data-tab="halee"     id="tabBtnHalee">Halee <span class="tab-count" id="tabCountHalee">46</span></button>
+  <button type="button" role="tab" data-tab="jaylee"    id="tabBtnJaylee">Jaylee <span class="tab-count" id="tabCountJaylee">31</span></button>
 </nav>
 
 <div class="kpi-strip" id="kpiStrip">
@@ -957,12 +1008,12 @@
 <main>
   
 
-  <!-- All customers tab (default Phase 1-2 view) -->
+  <!-- Pipeline tab — Cam's cross-team pipeline-priority overview. -->
   <div id="tabPanelAll" class="tab-panel" role="tabpanel">
     <div class="banner-caption">
-      <strong>Phase 3 — Focus tabs live.</strong> Halee + Jaylee each have
-      their own view above (defaulted to their identity). This <em>All
-      customers</em> view is Cam's cross-team overview: every card, sorted by
+      <strong>Pipeline view.</strong> Halee + Jaylee each have
+      their own tabs above (defaulted to their identity). This
+      <em>Pipeline</em> view is Cam's cross-team overview: every card, sorted by
       priority. Click any card to open the detail panel. Card state advances
       on the next daily pipeline run after saving — no browser refresh does it.
     </div>
@@ -3632,6 +3683,9 @@
     
   </div>
 
+  <!-- Customers tab — data view; customers land here as they move through the pipeline -->
+  <div id="tabPanelCustomers" class="tab-panel" role="tabpanel" hidden></div>
+
   <!-- Halee's focus tab (rendered client-side from CUSTOMERS array) -->
   <div id="tabPanelHalee"  class="tab-panel" role="tabpanel" hidden></div>
 
@@ -3822,9 +3876,9 @@
     return false;
   }
 
-  // ---- Phase 3: Tab nav (All customers / Halee / Jaylee) ----
+  // ---- Phase 3: Tab nav (Pipeline / Customers / Halee / Jaylee) ----
   const TAB_KEY = 'hc:pipeline:v1:tab';
-  const VALID_TABS = {all:1, halee:1, jaylee:1};
+  const VALID_TABS = {all:1, customers:1, halee:1, jaylee:1};
 
   function currentTab() {
     try {
@@ -3849,12 +3903,14 @@
       btn.classList.toggle('on', btn.getAttribute('data-tab') === t);
     });
     // Show/hide panels
-    document.getElementById('tabPanelAll'   ).hidden = (t !== 'all');
-    document.getElementById('tabPanelHalee' ).hidden = (t !== 'halee');
-    document.getElementById('tabPanelJaylee').hidden = (t !== 'jaylee');
-    // Hide the top KPI strip on focus tabs (each tab has its own stats)
+    document.getElementById('tabPanelAll'      ).hidden = (t !== 'all');
+    document.getElementById('tabPanelCustomers').hidden = (t !== 'customers');
+    document.getElementById('tabPanelHalee'    ).hidden = (t !== 'halee');
+    document.getElementById('tabPanelJaylee'   ).hidden = (t !== 'jaylee');
+    // Hide the top KPI strip on non-Pipeline tabs (each has its own stats)
     document.getElementById('kpiStrip').style.display = (t === 'all' ? '' : 'none');
     applyCohortFilter();
+    if (t === 'customers') renderCustomersTab(document.getElementById('tabPanelCustomers'));
     if (t === 'halee')  renderFocusTab('halee',  document.getElementById('tabPanelHalee'));
     if (t === 'jaylee') renderFocusTab('jaylee', document.getElementById('tabPanelJaylee'));
   }
@@ -4319,6 +4375,115 @@
         '<div class="stat-value">' + r[1] + '</div>' +
       '</div>';
     }).join('');
+  }
+
+  // ---- 2026-07-19: Customers tab (data view) ------------------------------
+  // Where customers land as they move through the pipeline. Three mutually
+  // exclusive buckets Cam chose to start with — filters within each bucket
+  // will come later:
+  //   New       — had (or scheduled) a first clean, not yet on the recurring roster
+  //   Converted — currently recurring AND became_recurring_at within 30 days
+  //   Retained  — currently recurring AND became_recurring_at older than 30 days
+  //                (or missing — grandfathered / long-tenured)
+  // The tab intentionally does NOT respect the cohort filter — it's Cam's
+  // holistic customer-base view. Lost customers show under "Retained" for
+  // now only if they're still is_recurring; churned ones are excluded until
+  // we add a Lost bucket.
+  function customerBucket(c) {
+    if (!c) return null;
+    const isRec = !!c.is_recurring;
+    const isLost = !!(c.pipeline_stage && (c.pipeline_stage.lost || c.pipeline_stage.current_stage === 'Lost'));
+    if (isLost) return null;   // no Lost bucket yet — Cam will add later
+    if (isRec) {
+      // Recently converted (within 30 days) vs long-tenured retained.
+      const bra = c.became_recurring_at;
+      if (bra) {
+        const braDate = parseIsoDate(bra);
+        const cutoff = new Date(todayDate()); cutoff.setDate(cutoff.getDate() - 30);
+        return (braDate && braDate >= cutoff) ? 'converted' : 'retained';
+      }
+      return 'retained';   // no became_recurring_at → treat as long-tenured
+    }
+    // Not recurring — new if they have any visit signal, else exclude
+    if (c.first_visit || c.next_scheduled) return 'new';
+    return null;
+  }
+
+  function renderCustomersTab(container) {
+    const buckets = { new: [], converted: [], retained: [] };
+    for (const c of CUSTOMERS) {
+      const b = customerBucket(c);
+      if (b) buckets[b].push(c);
+    }
+    // Sort each bucket in a way that surfaces the useful stuff first.
+    buckets['new'].sort(function(a,b){
+      return (b.first_visit || b.next_scheduled || '').localeCompare(a.first_visit || a.next_scheduled || '');
+    });
+    buckets['converted'].sort(function(a,b){
+      return (b.became_recurring_at || '').localeCompare(a.became_recurring_at || '');
+    });
+    buckets['retained'].sort(function(a,b){
+      return (a.display_name || '').localeCompare(b.display_name || '');
+    });
+
+    const setText = function(id, v) { const el = document.getElementById(id); if (el) el.textContent = String(v); };
+    setText('tabCountCustomers',
+      '(' + (buckets['new'].length + buckets['converted'].length + buckets['retained'].length) + ')');
+
+    // Sub-tab state (persists in localStorage). Defaults to 'new'.
+    const SUBTAB_KEY = 'hc:pipeline:v1:customers_subtab';
+    let sub = 'new';
+    try { sub = localStorage.getItem(SUBTAB_KEY) || 'new'; } catch (_) {}
+    if (!buckets[sub]) sub = 'new';
+
+    const renderList = function(rows) {
+      if (!rows.length) return '<div class="group-empty">No customers in this bucket right now.</div>';
+      return rows.map(function(c){
+        const name = esc(c.display_name || '');
+        const fv = c.first_visit ? fmtDateShort(c.first_visit) : '—';
+        const bra = c.became_recurring_at ? fmtDateShort(c.became_recurring_at) : '—';
+        const freq = c.frequency ? esc(c.frequency) : '—';
+        const state = c.state ? esc(c.state) : '';
+        return '<div class="cust-row" data-open-cid="' + esc(c.customer_id) + '">' +
+          '<span class="cust-name"><a href="#" onclick="event.preventDefault()">' + name + '</a></span>' +
+          '<span class="cust-meta">First visit: ' + esc(fv) + '</span>' +
+          '<span class="cust-meta">Became recurring: ' + esc(bra) + '</span>' +
+          '<span class="cust-meta">Cadence: ' + freq + '</span>' +
+          (state ? '<span class="badge state-' + esc(state.replace(/\s/g,'-')) + '">' + state + '</span>' : '') +
+        '</div>';
+      }).join('');
+    };
+
+    container.innerHTML =
+      '<div class="cust-header">' +
+        '<h2 class="focus-title">Customers</h2>' +
+        '<div class="focus-subtitle">Where customers land as they move through the pipeline. Not filtered by the cohort toggle.</div>' +
+      '</div>' +
+      '<div class="cust-subnav" role="tablist" aria-label="Customer buckets">' +
+        '<button type="button" data-cust-sub="new"       class="' + (sub==='new'?'on':'') + '">New <span class="tab-count">' + buckets['new'].length + '</span></button>' +
+        '<button type="button" data-cust-sub="converted" class="' + (sub==='converted'?'on':'') + '">Converted <span class="tab-count">' + buckets['converted'].length + '</span></button>' +
+        '<button type="button" data-cust-sub="retained"  class="' + (sub==='retained'?'on':'') + '">Retained <span class="tab-count">' + buckets['retained'].length + '</span></button>' +
+      '</div>' +
+      '<div class="cust-list-help">' +
+        (sub === 'new' ? 'Customers who had (or scheduled) a first clean but haven\'t gone recurring yet.' :
+         sub === 'converted' ? 'Customers who became recurring within the last 30 days.' :
+         'Long-tenured recurring customers.') +
+      '</div>' +
+      '<div class="cust-list">' + renderList(buckets[sub]) + '</div>';
+
+    container.querySelectorAll('[data-cust-sub]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        const val = btn.getAttribute('data-cust-sub');
+        try { localStorage.setItem(SUBTAB_KEY, val); } catch (_) {}
+        renderCustomersTab(container);
+      });
+    });
+    container.querySelectorAll('[data-open-cid]').forEach(function(el){
+      el.addEventListener('click', function(ev){
+        ev.stopPropagation();
+        openPanel(el.getAttribute('data-open-cid'));
+      });
+    });
   }
 
   function renderGroupList(rows, today) {
