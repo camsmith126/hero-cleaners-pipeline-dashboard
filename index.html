@@ -77,6 +77,42 @@
     0%, 100% { box-shadow: 0 0 0 0 rgba(217,36,41,0); }
     50%      { box-shadow: 0 0 0 6px rgba(217,36,41,0.35); }
   }
+  /* 2026-07-18: cohort filter bar — sits between header and tab nav */
+  .filter-bar {
+    background: #F9FAFB;
+    border-bottom: 1px solid var(--border);
+    padding: 10px 24px;
+  }
+  .filter-bar-inner {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  }
+  .filter-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+    text-transform: uppercase; color: var(--text-muted);
+  }
+  .filter-toggle {
+    display: inline-flex; background: #fff; border: 1px solid var(--border);
+    border-radius: 999px; padding: 2px; gap: 0;
+  }
+  .filter-toggle button {
+    padding: 6px 14px; background: transparent; border: 0; cursor: pointer;
+    font-family: inherit; font-size: 12px; font-weight: 600;
+    color: var(--text-muted); border-radius: 999px;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .filter-toggle button.on {
+    background: var(--hero-black); color: #fff;
+  }
+  .filter-toggle button:hover:not(.on) { color: var(--hero-black); }
+  .filter-hint {
+    font-size: 10px; font-weight: 500; opacity: 0.75;
+  }
+  .filter-note {
+    font-size: 11px; color: var(--text-muted); flex: 1; text-align: right;
+  }
+  /* When a card is hidden by the cohort filter it just doesn't render */
+  .card.filter-hidden { display: none !important; }
+
   /* Phase 3: Tab nav underneath the header */
   .tab-nav {
     background: #fff;
@@ -829,18 +865,32 @@
   </div>
 </div>
 
+<!-- Cohort filter bar — added 2026-07-18. Defaults to "new customers only"
+     so Halee/Jaylee aren't overwhelmed by historical customers who never
+     went through the new pipeline process. Cutoff: first_visit >= 2026-06-15. -->
+<div class="filter-bar" role="region" aria-label="Cohort filter">
+  <div class="filter-bar-inner">
+    <div class="filter-label">Cohort</div>
+    <div class="filter-toggle" role="radiogroup" aria-label="Customer cohort">
+      <button type="button" role="radio" data-cohort="new" id="cohortBtnNew" class="on">New customers only <span class="filter-hint">Jun 15, 2026+</span></button>
+      <button type="button" role="radio" data-cohort="all" id="cohortBtnAll">All customers <span class="filter-hint">including historical</span></button>
+    </div>
+    <div class="filter-note">Filter based on first-visit date. Change to see the full roster.</div>
+  </div>
+</div>
+
 <nav class="tab-nav" role="tablist" aria-label="Pipeline view">
-  <button type="button" role="tab" data-tab="all"    id="tabBtnAll">All customers <span class="tab-count">222</span></button>
-  <button type="button" role="tab" data-tab="halee"  id="tabBtnHalee">Halee <span class="tab-count">57</span></button>
-  <button type="button" role="tab" data-tab="jaylee" id="tabBtnJaylee">Jaylee <span class="tab-count">31</span></button>
+  <button type="button" role="tab" data-tab="all"    id="tabBtnAll">All customers <span class="tab-count" id="tabCountAll">222</span></button>
+  <button type="button" role="tab" data-tab="halee"  id="tabBtnHalee">Halee <span class="tab-count" id="tabCountHalee">57</span></button>
+  <button type="button" role="tab" data-tab="jaylee" id="tabBtnJaylee">Jaylee <span class="tab-count" id="tabCountJaylee">31</span></button>
 </nav>
 
 <div class="kpi-strip" id="kpiStrip">
-  <div class="kpi"><div class="label">Total customers</div><div class="value">222</div></div>
-  <div class="kpi done-green"><div class="label">In active pipeline</div><div class="value">91</div></div>
-  <div class="kpi hero-red"><div class="label">Awaiting Jaylee</div><div class="value">31</div></div>
-  <div class="kpi"><div class="label">Awaiting Halee</div><div class="value">57</div></div>
-  <div class="kpi"><div class="label">Lost</div><div class="value">131</div></div>
+  <div class="kpi"><div class="label">Total customers</div><div class="value" id="kpiTotal">222</div></div>
+  <div class="kpi done-green"><div class="label">In active pipeline</div><div class="value" id="kpiActive">91</div></div>
+  <div class="kpi hero-red"><div class="label">Awaiting Jaylee</div><div class="value" id="kpiJaylee">31</div></div>
+  <div class="kpi"><div class="label">Awaiting Halee</div><div class="value" id="kpiHalee">57</div></div>
+  <div class="kpi"><div class="label">Lost</div><div class="value" id="kpiLost">131</div></div>
 </div>
 
 <main>
@@ -856,7 +906,7 @@
       on the next daily pipeline run after saving — no browser refresh does it.
     </div>
     
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_bfd8b232f46d4365a2c10990a4cce322">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_bfd8b232f46d4365a2c10990a4cce322" data-first-visit="2026-07-17">
       <div class="card-header">
         <div class="card-name">Sandra Bearce</div>
         <div class="card-meta">Overdue · cleaner: Whitney Ramsaram</div>
@@ -868,7 +918,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_74e083d4511547fdbc9cd0bd1782584e">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_74e083d4511547fdbc9cd0bd1782584e" data-first-visit="2026-06-17">
       <div class="card-header">
         <div class="card-name">Terry Fox</div>
         <div class="card-meta">Overdue · cleaner: Savannah Iverson</div>
@@ -880,7 +930,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_bb4f59bf5d114ccfba1e063b043cb51a">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_bb4f59bf5d114ccfba1e063b043cb51a" data-first-visit="2026-07-16">
       <div class="card-header">
         <div class="card-name">Machelle Hart</div>
         <div class="card-meta">Overdue · cleaner: Whitney Ramsaram</div>
@@ -892,7 +942,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_15aaea255d9844069f94fb4833467e59">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_15aaea255d9844069f94fb4833467e59" data-first-visit="2026-03-04">
       <div class="card-header">
         <div class="card-name">Hydee Packer</div>
         <div class="card-meta">Overdue · cleaner: Jessi Knudsen, Olivia Wilcox</div>
@@ -904,7 +954,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::abel beland">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::abel beland" data-first-visit="2026-07-13">
       <div class="card-header">
         <div class="card-name">abel beland</div>
         <div class="card-meta">Overdue · cleaner: Alyssa Kendall, Whitney Ramsaram</div>
@@ -916,7 +966,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::sarah grajdura">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::sarah grajdura" data-first-visit="2024-10-29">
       <div class="card-header">
         <div class="card-name">Sarah Grajdura</div>
         <div class="card-meta">Overdue · cleaner: Halee Brady, Hero Fam</div>
@@ -928,7 +978,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::chandler ravsten">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::chandler ravsten" data-first-visit="2026-07-10">
       <div class="card-header">
         <div class="card-name">Chandler Ravsten</div>
         <div class="card-meta">Overdue · cleaner: Alyssa Kendall, Whitney Ramsaram</div>
@@ -940,7 +990,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::alta markeson">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::alta markeson" data-first-visit="2026-07-09">
       <div class="card-header">
         <div class="card-name">Alta Markeson</div>
         <div class="card-meta">Overdue · cleaner: Jessi Knudsen, Savannah Iverson</div>
@@ -952,7 +1002,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::courtney spradling">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::courtney spradling" data-first-visit="2026-07-09">
       <div class="card-header">
         <div class="card-name">Courtney Spradling</div>
         <div class="card-meta">Overdue · cleaner: Jessi Knudsen</div>
@@ -964,7 +1014,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::jeanne neal">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::jeanne neal" data-first-visit="2026-07-09">
       <div class="card-header">
         <div class="card-name">Jeanne Neal</div>
         <div class="card-meta">Overdue · cleaner: Savannah Iverson</div>
@@ -976,7 +1026,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::timothy luoma">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::timothy luoma" data-first-visit="2026-07-08">
       <div class="card-header">
         <div class="card-name">Timothy Luoma</div>
         <div class="card-meta">Overdue · cleaner: Alyssa Kendall, Whitney Ramsaram</div>
@@ -988,7 +1038,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::joe johnson">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::joe johnson" data-first-visit="2026-07-08">
       <div class="card-header">
         <div class="card-name">Joe Johnson</div>
         <div class="card-meta">Overdue · cleaner: Savannah Iverson</div>
@@ -1000,7 +1050,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::spencer francis">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::spencer francis" data-first-visit="2026-07-07">
       <div class="card-header">
         <div class="card-name">Spencer Francis</div>
         <div class="card-meta">Overdue · cleaner: Halee Brady, Jessi Knudsen</div>
@@ -1012,7 +1062,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::travis combe">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::travis combe" data-first-visit="2026-07-07">
       <div class="card-header">
         <div class="card-name">Travis Combe</div>
         <div class="card-meta">Overdue · cleaner: Jessi Knudsen</div>
@@ -1024,7 +1074,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::ashley hall">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::ashley hall" data-first-visit="2025-01-16">
       <div class="card-header">
         <div class="card-name">Ashley Hall</div>
         <div class="card-meta">Overdue · cleaner: Alyssa Kendall</div>
@@ -1036,7 +1086,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::maggie whoolery">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::maggie whoolery" data-first-visit="2026-06-29">
       <div class="card-header">
         <div class="card-name">Maggie Whoolery</div>
         <div class="card-meta">Overdue · cleaner: Alyssa Kendall, Halee Brady</div>
@@ -1048,7 +1098,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::betty yang">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::betty yang" data-first-visit="2026-07-03">
       <div class="card-header">
         <div class="card-name">Betty Yang</div>
         <div class="card-meta">Overdue · cleaner: Alyssa Kendall, Whitney Ramsaram</div>
@@ -1060,7 +1110,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::matt reeder">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::matt reeder" data-first-visit="2026-07-02">
       <div class="card-header">
         <div class="card-name">Matt Reeder</div>
         <div class="card-meta">Overdue · cleaner: Halee Brady, Whitney Ramsaram</div>
@@ -1072,7 +1122,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::connor winger">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::connor winger" data-first-visit="2026-07-02">
       <div class="card-header">
         <div class="card-name">Connor Winger</div>
         <div class="card-meta">Overdue · cleaner: Savannah Iverson</div>
@@ -1084,7 +1134,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::jacob verich">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::jacob verich" data-first-visit="2026-06-30">
       <div class="card-header">
         <div class="card-name">Jacob Verich</div>
         <div class="card-meta">Overdue · cleaner: Halee Brady, Savannah Iverson</div>
@@ -1096,7 +1146,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::tanya romney">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::tanya romney" data-first-visit="2026-06-30">
       <div class="card-header">
         <div class="card-name">Tanya Romney</div>
         <div class="card-meta">Overdue · cleaner: Alyssa Kendall, Whitney Ramsaram</div>
@@ -1108,7 +1158,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::samantha yoder">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::samantha yoder" data-first-visit="2026-06-25">
       <div class="card-header">
         <div class="card-name">Samantha Yoder</div>
         <div class="card-meta">At Risk · cleaner: Halee Brady, Jessi Knudsen</div>
@@ -1120,7 +1170,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::fawad khan">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::fawad khan" data-first-visit="2026-06-25">
       <div class="card-header">
         <div class="card-name">Fawad Khan</div>
         <div class="card-meta">At Risk · cleaner: Halee Brady, Jessi Knudsen</div>
@@ -1132,7 +1182,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::kyle andrus">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::kyle andrus" data-first-visit="2026-06-22">
       <div class="card-header">
         <div class="card-name">Kyle Andrus</div>
         <div class="card-meta">At Risk · cleaner: Halee Brady</div>
@@ -1144,7 +1194,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::robyn dallin">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::robyn dallin" data-first-visit="2026-06-19">
       <div class="card-header">
         <div class="card-name">Robyn Dallin</div>
         <div class="card-meta">At Risk · cleaner: Jessi Knudsen</div>
@@ -1156,7 +1206,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_dcb805abf7d540588f5bb46769f4391c">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_dcb805abf7d540588f5bb46769f4391c" data-first-visit="2026-06-10">
       <div class="card-header">
         <div class="card-name">Elkridge Investments</div>
         <div class="card-meta">Monthly · <span class="tag tag-est">grandfathered</span> · cleaner: Jordyn Payne</div>
@@ -1168,7 +1218,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_8482d635ae174075a42af26d5f2d1717">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_8482d635ae174075a42af26d5f2d1717" data-first-visit="2026-06-27">
       <div class="card-header">
         <div class="card-name">NBCG</div>
         <div class="card-meta">Weekly · <span class="tag tag-est">grandfathered</span> · cleaner: Jordyn Payne</div>
@@ -1180,7 +1230,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_7a8561b1d1034bc6baddeb22fc9dd5fc">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_7a8561b1d1034bc6baddeb22fc9dd5fc" data-first-visit="2024-09-26">
       <div class="card-header">
         <div class="card-name">Kathy Smith</div>
         <div class="card-meta">Bi-Weekly · cleaner: Corbin Turner, Halee Brady, Hero Fam, Lizette Espana</div>
@@ -1192,7 +1242,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_24bbe167a5394199bab7ba17bae9a6b4">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_24bbe167a5394199bab7ba17bae9a6b4" data-first-visit="2024-10-01">
       <div class="card-header">
         <div class="card-name">Dean Mauchley</div>
         <div class="card-meta">Bi-Weekly · cleaner: Halee Brady, Hero Fam</div>
@@ -1204,7 +1254,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_e7cd02257f764208bba9ea83f0074f49">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_e7cd02257f764208bba9ea83f0074f49" data-first-visit="2024-10-10">
       <div class="card-header">
         <div class="card-name">Diane Devine</div>
         <div class="card-meta">Bi-Weekly · cleaner: Corbin Turner, Halee Brady, Hero Fam, Lizette Espana</div>
@@ -1216,7 +1266,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_9c5a76ff52d74fec8ef5f6dddfa08e6e">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_9c5a76ff52d74fec8ef5f6dddfa08e6e" data-first-visit="2025-12-12">
       <div class="card-header">
         <div class="card-name">erica stuber</div>
         <div class="card-meta">Bi-Weekly · cleaner: Halee Brady</div>
@@ -1228,7 +1278,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::cody davis">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::cody davis" data-first-visit="2025-02-06">
       <div class="card-header">
         <div class="card-name">Cody Davis</div>
         <div class="card-meta">Weekly · <span class="tag tag-est">grandfathered</span> · cleaner: Alyssa Kendall, Halee Brady, Laura Anderson</div>
@@ -1240,7 +1290,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_8876c6886ef647e98fa4da928a8a5960">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_8876c6886ef647e98fa4da928a8a5960" data-first-visit="2024-10-16">
       <div class="card-header">
         <div class="card-name">Cortni Stokes</div>
         <div class="card-meta">Weekly · cleaner: Devon Ward, Helaman Egan, Zack Kehoe</div>
@@ -1252,7 +1302,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_dc4ef63d64bf4d50b5cb63e15fb77621">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_dc4ef63d64bf4d50b5cb63e15fb77621" data-first-visit="2026-01-15">
       <div class="card-header">
         <div class="card-name">Linda Van Ierssel</div>
         <div class="card-meta">Bi-Weekly · cleaner: Alyssa Kendall</div>
@@ -1264,7 +1314,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_2bb9689cde044778969149459670d733">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_2bb9689cde044778969149459670d733" data-first-visit="2026-01-29">
       <div class="card-header">
         <div class="card-name">Marilyn Johnson</div>
         <div class="card-meta">Monthly · cleaner: Alyssa Kendall</div>
@@ -1276,7 +1326,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_5f68d940bdf84e3b9becd4a234300f98">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_5f68d940bdf84e3b9becd4a234300f98" data-first-visit="2024-02-09">
       <div class="card-header">
         <div class="card-name">Lisa Anderson</div>
         <div class="card-meta">Bi-Weekly · cleaner: Goldie Wihongi, Lance Lundahl</div>
@@ -1288,7 +1338,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_7d5d8ab1d95249e8aff4072c4e1afda6">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_7d5d8ab1d95249e8aff4072c4e1afda6" data-first-visit="2025-09-24">
       <div class="card-header">
         <div class="card-name">Angela Nielsen</div>
         <div class="card-meta">Bi-Weekly · cleaner: Olivia Wilcox</div>
@@ -1300,7 +1350,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_e120e1da839e4276876fb0f06de4d585">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_e120e1da839e4276876fb0f06de4d585" data-first-visit="2024-10-11">
       <div class="card-header">
         <div class="card-name">Jan Thomander</div>
         <div class="card-meta">Bi-Weekly · cleaner: Halee Brady, Hero Fam, Lizette Espana</div>
@@ -1312,7 +1362,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_4360abddfed44a3bb219f0df7850e426">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_4360abddfed44a3bb219f0df7850e426" data-first-visit="2024-04-08">
       <div class="card-header">
         <div class="card-name">Jodi Skinner</div>
         <div class="card-meta">Monthly · cleaner: Brittony Matson, Kiya Thomas</div>
@@ -1324,7 +1374,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_8d07f3f9bd994993abf906fa67b5b40b">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_8d07f3f9bd994993abf906fa67b5b40b" data-first-visit="2026-07-15">
       <div class="card-header">
         <div class="card-name">Elle Lunt</div>
         <div class="card-meta">Weekly · cleaner: Savannah Iverson, Whitney Ramsaram</div>
@@ -1336,7 +1386,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_c46dc23fb6834812b29fe1e6c28ca2cc">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_c46dc23fb6834812b29fe1e6c28ca2cc" data-first-visit="2026-07-15">
       <div class="card-header">
         <div class="card-name">Sarah Liston</div>
         <div class="card-meta">Bi-Weekly · cleaner: Savannah Iverson, Whitney Ramsaram</div>
@@ -1348,7 +1398,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_2ad577317931444e8974a625fbedc976">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_2ad577317931444e8974a625fbedc976" data-first-visit="2025-01-17">
       <div class="card-header">
         <div class="card-name">Kendra Black</div>
         <div class="card-meta">Bi-Weekly · cleaner: Alyssa Kendall</div>
@@ -1360,7 +1410,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_a2b92c76d03f4505b277b70a9a180230">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_a2b92c76d03f4505b277b70a9a180230" data-first-visit="2024-07-17">
       <div class="card-header">
         <div class="card-name">Jaymes Monson</div>
         <div class="card-meta">Monthly · cleaner: Kendree Hamblin, Lizette Espana</div>
@@ -1372,7 +1422,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_cabf3316e8354e75a0e8373849070542">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_cabf3316e8354e75a0e8373849070542" data-first-visit="2025-09-15">
       <div class="card-header">
         <div class="card-name">Charlene Noack</div>
         <div class="card-meta">Bi-Weekly · cleaner: Alyssa Kendall</div>
@@ -1384,7 +1434,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_a82d4f062a074985ab33f38d0b645993">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_a82d4f062a074985ab33f38d0b645993" data-first-visit="2024-01-26">
       <div class="card-header">
         <div class="card-name">Janice Leishman</div>
         <div class="card-meta">Bi-Weekly · cleaner: Nicole Leishman</div>
@@ -1396,7 +1446,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_842e7204638942d6844563ccd32dfd46">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_842e7204638942d6844563ccd32dfd46" data-first-visit="2026-01-08">
       <div class="card-header">
         <div class="card-name">Ginger McLeod</div>
         <div class="card-meta">Bi-Weekly · cleaner: Alyssa Kendall</div>
@@ -1408,7 +1458,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_f36ec9373b184a3d8e521576d8b28abc">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_f36ec9373b184a3d8e521576d8b28abc" data-first-visit="2026-04-20">
       <div class="card-header">
         <div class="card-name">Kenzee Willis</div>
         <div class="card-meta">Bi-Weekly · cleaner: Jessi Knudsen</div>
@@ -1420,7 +1470,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_d04da2728f25409dbf88a0e018c7c6db">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_d04da2728f25409dbf88a0e018c7c6db" data-first-visit="2026-06-29">
       <div class="card-header">
         <div class="card-name">Nate Richards</div>
         <div class="card-meta">Weekly · cleaner: Jessi Knudsen</div>
@@ -1432,7 +1482,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_e6458a8b87f746279eba8f419f1ec30c">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_e6458a8b87f746279eba8f419f1ec30c" data-first-visit="2024-01-03">
       <div class="card-header">
         <div class="card-name">Mary Jo Dahle</div>
         <div class="card-meta">Bi-Weekly · cleaner: Goldie Wihongi, Lance Lundahl, Nicole Leishman</div>
@@ -1444,7 +1494,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_17c6df95d47144468ed798fc583e7b6a">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_17c6df95d47144468ed798fc583e7b6a" data-first-visit="2025-02-28">
       <div class="card-header">
         <div class="card-name">Amrit Judd</div>
         <div class="card-meta">Bi-Weekly · cleaner: Alyssa Kendall, Hero Fam</div>
@@ -1456,7 +1506,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_b8c46657fdec4e87bf47596092a369c5">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_b8c46657fdec4e87bf47596092a369c5" data-first-visit="2026-01-23">
       <div class="card-header">
         <div class="card-name">Lindsay Taylor</div>
         <div class="card-meta">Bi-Weekly · cleaner: Halee Brady</div>
@@ -1468,7 +1518,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_6a31907dcce74246abe89069185a3728">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_6a31907dcce74246abe89069185a3728" data-first-visit="2025-12-30">
       <div class="card-header">
         <div class="card-name">Taylor Wille</div>
         <div class="card-meta">Bi-Weekly · cleaner: Halee Brady</div>
@@ -1480,7 +1530,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_6b54b070536a43c89a88b04df7302ff6">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_6b54b070536a43c89a88b04df7302ff6" data-first-visit="2024-10-30">
       <div class="card-header">
         <div class="card-name">LeeAnn Cannon</div>
         <div class="card-meta">Bi-Weekly · cleaner: Halee Brady, Hero Fam</div>
@@ -1492,7 +1542,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_1dc0125098b1423e81c8ea5ab5154388">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_1dc0125098b1423e81c8ea5ab5154388" data-first-visit="2025-06-24">
       <div class="card-header">
         <div class="card-name">Elaine Negus</div>
         <div class="card-meta">Monthly · cleaner: Halee Brady</div>
@@ -1504,7 +1554,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_360b2e1d9d864661bfcd5c1217d675b9">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_360b2e1d9d864661bfcd5c1217d675b9" data-first-visit="2026-04-29">
       <div class="card-header">
         <div class="card-name">Rebecca Walsman</div>
         <div class="card-meta">Bi-Weekly · cleaner: Alyssa Kendall</div>
@@ -1516,7 +1566,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_bef5039798fc4bb98ca61df8f4ccee63">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_bef5039798fc4bb98ca61df8f4ccee63" data-first-visit="2026-04-15">
       <div class="card-header">
         <div class="card-name">Katie Kennedy</div>
         <div class="card-meta">Monthly · cleaner: Savannah Iverson</div>
@@ -1528,7 +1578,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_6a8282dcdda74ffb9b479d2864535015">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_6a8282dcdda74ffb9b479d2864535015" data-first-visit="2025-08-05">
       <div class="card-header">
         <div class="card-name">Megan Smith</div>
         <div class="card-meta">Bi-Weekly · cleaner: Halee Brady</div>
@@ -1540,7 +1590,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_8e07b1e879aa4eb9bcd9ca7694c5c5a1">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_8e07b1e879aa4eb9bcd9ca7694c5c5a1" data-first-visit="2025-10-01">
       <div class="card-header">
         <div class="card-name">Elaine Wilcox</div>
         <div class="card-meta">Bi-Weekly · cleaner: Alyssa Kendall</div>
@@ -1552,7 +1602,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_588ddea160b340409c929812008869f8">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_588ddea160b340409c929812008869f8" data-first-visit="2025-09-18">
       <div class="card-header">
         <div class="card-name">Nate Neilson</div>
         <div class="card-meta">Monthly · cleaner: Halee Brady</div>
@@ -1564,7 +1614,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_79679945f6b34fcc82bc28838f74ad85">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_79679945f6b34fcc82bc28838f74ad85" data-first-visit="2025-11-24">
       <div class="card-header">
         <div class="card-name">Ginny Tremayne</div>
         <div class="card-meta">Monthly · cleaner: Jaylee Rothwell</div>
@@ -1576,7 +1626,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_7ffba8ed0a23408c8304594945df6df1">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_7ffba8ed0a23408c8304594945df6df1" data-first-visit="2024-02-09">
       <div class="card-header">
         <div class="card-name">Kae Sundberg</div>
         <div class="card-meta">Monthly · cleaner: Nicole Leishman</div>
@@ -1588,7 +1638,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_937ebac6e5a040c0b5234612083db508">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_937ebac6e5a040c0b5234612083db508" data-first-visit="2024-12-09">
       <div class="card-header">
         <div class="card-name">Megan Acord</div>
         <div class="card-meta">Monthly · cleaner: Halee Brady</div>
@@ -1600,7 +1650,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_ac1a5339ff974e5cb0ce582e7e2a2cf1">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_ac1a5339ff974e5cb0ce582e7e2a2cf1" data-first-visit="2026-07-02">
       <div class="card-header">
         <div class="card-name">Megan Keay</div>
         <div class="card-meta">Monthly · cleaner: Savannah Iverson</div>
@@ -1612,7 +1662,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_8d290f3c0b604e48ae3350d9d330aec9">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_8d290f3c0b604e48ae3350d9d330aec9" data-first-visit="2026-01-13">
       <div class="card-header">
         <div class="card-name">Dawn Poulsen</div>
         <div class="card-meta">Overdue · cleaner: Halee Brady</div>
@@ -1624,7 +1674,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_20e1180e135f4bd68d2f324409b1e701">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_20e1180e135f4bd68d2f324409b1e701" data-first-visit="2024-12-12">
       <div class="card-header">
         <div class="card-name">Mary Lee Stoner</div>
         <div class="card-meta">Monthly · cleaner: Halee Brady</div>
@@ -1636,7 +1686,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_47edae9b9e9540eb8b73250a56e2efed">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_47edae9b9e9540eb8b73250a56e2efed" data-first-visit="2024-02-09">
       <div class="card-header">
         <div class="card-name">Cara Brewer</div>
         <div class="card-meta">Monthly · cleaner: Nicole Leishman</div>
@@ -1648,7 +1698,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_8cd9f47d8b3d41758c66e8e0e03ded3e">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_8cd9f47d8b3d41758c66e8e0e03ded3e" data-first-visit="2026-02-09">
       <div class="card-header">
         <div class="card-name">M’Kenzee Mickelsen</div>
         <div class="card-meta">Monthly · cleaner: Halee Brady, Jessi Knudsen</div>
@@ -1660,7 +1710,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_bd2124767405454d9da4e36e255505e4">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_bd2124767405454d9da4e36e255505e4" data-first-visit="2026-01-17">
       <div class="card-header">
         <div class="card-name">Scott Needham</div>
         <div class="card-meta">Monthly · cleaner: Halee Brady</div>
@@ -1672,7 +1722,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_d1712e002be5482db9d22b972378200c">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_d1712e002be5482db9d22b972378200c" data-first-visit="2024-11-06">
       <div class="card-header">
         <div class="card-name">Ida Davis</div>
         <div class="card-meta">Bi-Weekly · cleaner: Corbin Turner, Hero Fam, Lizette Espana</div>
@@ -1684,7 +1734,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_69651c590f364ce89f33455986011f99">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_69651c590f364ce89f33455986011f99" data-first-visit="2026-03-06">
       <div class="card-header">
         <div class="card-name">Raymond Veon</div>
         <div class="card-meta">Bi-Weekly · cleaner: Olivia Wilcox</div>
@@ -1696,7 +1746,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::michelle premer">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::michelle premer" data-first-visit="2025-01-21">
       <div class="card-header">
         <div class="card-name">Michelle Premer</div>
         <div class="card-meta">At Risk · cleaner: Alyssa Kendall</div>
@@ -1708,7 +1758,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_526b531af2844e40bf3083e463713f55">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_526b531af2844e40bf3083e463713f55" data-first-visit="2024-09-16">
       <div class="card-header">
         <div class="card-name">Fay Mason</div>
         <div class="card-meta">Monthly · cleaner: Halee Brady, Jaylee Rothwell, Lizette Espana</div>
@@ -1720,7 +1770,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_c71fd1e793f140f987f16db1ebbcd213">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_c71fd1e793f140f987f16db1ebbcd213" data-first-visit="2024-12-16">
       <div class="card-header">
         <div class="card-name">Joseph Pojunis</div>
         <div class="card-meta">Monthly · cleaner: Halee Brady</div>
@@ -1732,7 +1782,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::laurie suchan">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::laurie suchan" data-first-visit="2026-06-16">
       <div class="card-header">
         <div class="card-name">Laurie Suchan</div>
         <div class="card-meta">Lost · cleaner: Halee Brady, Jessi Knudsen</div>
@@ -1744,7 +1794,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_b8434b3d341e416eae4b4e53dc09b45a">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_b8434b3d341e416eae4b4e53dc09b45a" data-first-visit="2026-05-25">
       <div class="card-header">
         <div class="card-name">Marianne Bunn</div>
         <div class="card-meta">Monthly · cleaner: Alyssa Kendall, Savannah Iverson</div>
@@ -1756,7 +1806,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_e666adc1ba68414cb6d1c4c2a96311c2">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_e666adc1ba68414cb6d1c4c2a96311c2" data-first-visit="2026-05-25">
       <div class="card-header">
         <div class="card-name">Myrna Humphreys</div>
         <div class="card-meta">Monthly · cleaner: Jessi Knudsen</div>
@@ -1768,7 +1818,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::pi kappa alpha">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::pi kappa alpha" data-first-visit="2026-06-22">
       <div class="card-header">
         <div class="card-name">PI Kappa Alpha</div>
         <div class="card-meta">2x per Week · <span class="tag tag-est">grandfathered</span> · cleaner: Dana Kramer</div>
@@ -1780,7 +1830,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_322b7e7292774aa99c637679a3aaade6">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_322b7e7292774aa99c637679a3aaade6" data-first-visit="2025-03-06">
       <div class="card-header">
         <div class="card-name">Molly Hysell</div>
         <div class="card-meta">Bi-Weekly · cleaner: Halee Brady</div>
@@ -1792,7 +1842,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::paige leon">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::paige leon" data-first-visit="2026-06-13">
       <div class="card-header">
         <div class="card-name">Paige Leon</div>
         <div class="card-meta">Lost · cleaner: Savannah Iverson</div>
@@ -1804,7 +1854,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::amrutha smith">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::amrutha smith" data-first-visit="2026-06-12">
       <div class="card-header">
         <div class="card-name">Amrutha Smith</div>
         <div class="card-meta">Lost · cleaner: Jessi Knudsen</div>
@@ -1816,7 +1866,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::circle b irrigation">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::circle b irrigation" data-first-visit="2026-06-08">
       <div class="card-header">
         <div class="card-name">Circle B Irrigation</div>
         <div class="card-meta">Lost · <span class="tag tag-est">grandfathered</span> · cleaner: Jordyn Payne</div>
@@ -1828,7 +1878,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::lori olsen">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::lori olsen" data-first-visit="2026-06-05">
       <div class="card-header">
         <div class="card-name">Lori Olsen</div>
         <div class="card-meta">Lost · cleaner: Savannah Iverson</div>
@@ -1840,7 +1890,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::tim tolbert">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::tim tolbert" data-first-visit="2026-06-04">
       <div class="card-header">
         <div class="card-name">Tim Tolbert</div>
         <div class="card-meta">Lost · cleaner: Savannah Iverson</div>
@@ -1852,7 +1902,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::dotti toone">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::dotti toone" data-first-visit="2024-03-22">
       <div class="card-header">
         <div class="card-name">Dotti toone</div>
         <div class="card-meta">Lost · cleaner: Hero Fam</div>
@@ -1864,7 +1914,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::makayla johnson">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::makayla johnson" data-first-visit="2026-06-02">
       <div class="card-header">
         <div class="card-name">Makayla Johnson</div>
         <div class="card-meta">Lost · cleaner: Kennedy Anderson, Savannah Iverson</div>
@@ -1876,7 +1926,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::rebecca williams">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::rebecca williams" data-first-visit="2026-05-29">
       <div class="card-header">
         <div class="card-name">Rebecca Williams</div>
         <div class="card-meta">Lost · cleaner: Savannah Iverson</div>
@@ -1888,7 +1938,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::katelyn grayveal">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::katelyn grayveal" data-first-visit="2026-05-28">
       <div class="card-header">
         <div class="card-name">Katelyn Grayveal</div>
         <div class="card-meta">Lost · cleaner: Savannah Iverson</div>
@@ -1900,7 +1950,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::maren stephens">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::maren stephens" data-first-visit="2026-05-28">
       <div class="card-header">
         <div class="card-name">Maren Stephens</div>
         <div class="card-meta">Lost · cleaner: Jessi Knudsen, Kennedy Anderson</div>
@@ -1912,7 +1962,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::jake dustin">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::jake dustin" data-first-visit="2026-05-27">
       <div class="card-header">
         <div class="card-name">Jake Dustin</div>
         <div class="card-meta">Lost · cleaner: Jessi Knudsen</div>
@@ -1924,7 +1974,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::gage atkinson">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::gage atkinson" data-first-visit="2026-05-27">
       <div class="card-header">
         <div class="card-name">Gage Atkinson</div>
         <div class="card-meta">Lost · cleaner: Kennedy Anderson, Savannah Iverson</div>
@@ -1936,7 +1986,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::katie swapp">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::katie swapp" data-first-visit="2026-05-26">
       <div class="card-header">
         <div class="card-name">Katie Swapp</div>
         <div class="card-meta">Lost · cleaner: Halee Brady</div>
@@ -1948,7 +1998,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_b1a408a9f9a042c6b2ec67e5214049c7">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_b1a408a9f9a042c6b2ec67e5214049c7" data-first-visit="2025-08-04">
       <div class="card-header">
         <div class="card-name">Julie Olson</div>
         <div class="card-meta">Monthly · cleaner: Halee Brady</div>
@@ -1960,7 +2010,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::cass hardman">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::cass hardman" data-first-visit="2026-05-25">
       <div class="card-header">
         <div class="card-name">Cass Hardman</div>
         <div class="card-meta">Lost · cleaner: Jessi Knudsen</div>
@@ -1972,7 +2022,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::k.o. fisher">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::k.o. fisher" data-first-visit="2026-01-20">
       <div class="card-header">
         <div class="card-name">K.O. Fisher</div>
         <div class="card-meta">Lost · cleaner: Halee Brady</div>
@@ -1984,7 +2034,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::luke hegemann">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::luke hegemann" data-first-visit="2026-05-05">
       <div class="card-header">
         <div class="card-name">Luke Hegemann</div>
         <div class="card-meta">Lost · cleaner: Savannah Iverson</div>
@@ -1996,7 +2046,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::reta whalen">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::reta whalen" data-first-visit="2026-05-04">
       <div class="card-header">
         <div class="card-name">Reta Whalen</div>
         <div class="card-meta">Lost · cleaner: Alyssa Kendall</div>
@@ -2008,7 +2058,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::kate bushman">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::kate bushman" data-first-visit="2026-05-04">
       <div class="card-header">
         <div class="card-name">Kate Bushman</div>
         <div class="card-meta">Lost · cleaner: Savannah Iverson</div>
@@ -2020,7 +2070,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::mandie hale">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::mandie hale" data-first-visit="2026-04-28">
       <div class="card-header">
         <div class="card-name">Mandie Hale</div>
         <div class="card-meta">Lost · cleaner: Savannah Iverson</div>
@@ -2032,7 +2082,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::brian jones">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::brian jones" data-first-visit="2026-04-27">
       <div class="card-header">
         <div class="card-name">Brian Jones</div>
         <div class="card-meta">Lost · cleaner: Halee Brady, Jessi Knudsen</div>
@@ -2044,7 +2094,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::jp wackenstedt">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::jp wackenstedt" data-first-visit="2026-04-24">
       <div class="card-header">
         <div class="card-name">JP Wackenstedt</div>
         <div class="card-meta">Lost · cleaner: Jessi Knudsen</div>
@@ -2056,7 +2106,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::star coulbrooke">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::star coulbrooke" data-first-visit="2026-04-23">
       <div class="card-header">
         <div class="card-name">Star Coulbrooke</div>
         <div class="card-meta">Lost · cleaner: Jessi Knudsen, Savannah Iverson</div>
@@ -2068,7 +2118,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::lenis hansen">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::lenis hansen" data-first-visit="2024-02-21">
       <div class="card-header">
         <div class="card-name">Lenis Hansen</div>
         <div class="card-meta">Lost · cleaner: Goldie Wihongi, Lance Lundahl</div>
@@ -2080,7 +2130,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::kendra thurgood">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::kendra thurgood" data-first-visit="2025-10-21">
       <div class="card-header">
         <div class="card-name">Kendra Thurgood</div>
         <div class="card-meta">Lost · cleaner: Olivia Wilcox</div>
@@ -2092,7 +2142,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::kaden kartsone">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::kaden kartsone" data-first-visit="2025-02-13">
       <div class="card-header">
         <div class="card-name">Kaden Kartsone</div>
         <div class="card-meta">Lost · cleaner: Alyssa Kendall</div>
@@ -2104,7 +2154,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_fddb44019fbe4f7bb459d0e7753a8d49">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_fddb44019fbe4f7bb459d0e7753a8d49" data-first-visit="2025-01-15">
       <div class="card-header">
         <div class="card-name">Sharly King</div>
         <div class="card-meta">Monthly · cleaner: Halee Brady, Hero Fam</div>
@@ -2116,7 +2166,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::meredith stoner">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::meredith stoner" data-first-visit="2026-04-09">
       <div class="card-header">
         <div class="card-name">Meredith Stoner</div>
         <div class="card-meta">Lost · cleaner: Savannah Iverson</div>
@@ -2128,7 +2178,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::autumn belt">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::autumn belt" data-first-visit="2026-03-20">
       <div class="card-header">
         <div class="card-name">Autumn Belt</div>
         <div class="card-meta">Lost · cleaner: Savannah Iverson</div>
@@ -2140,7 +2190,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::cameron smith">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::cameron smith" data-first-visit="2024-12-16">
       <div class="card-header">
         <div class="card-name">Cameron Smith</div>
         <div class="card-meta">Lost · cleaner: Hero Fam</div>
@@ -2152,7 +2202,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::alissa wells">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::alissa wells" data-first-visit="2026-03-30">
       <div class="card-header">
         <div class="card-name">Alissa Wells</div>
         <div class="card-meta">Lost · cleaner: Jessi Knudsen</div>
@@ -2164,7 +2214,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::aaron klopfenstein">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::aaron klopfenstein" data-first-visit="2025-06-23">
       <div class="card-header">
         <div class="card-name">Aaron Klopfenstein</div>
         <div class="card-meta">Lost · cleaner: Alyssa Kendall</div>
@@ -2176,7 +2226,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::kelsey flake">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::kelsey flake" data-first-visit="2026-03-20">
       <div class="card-header">
         <div class="card-name">Kelsey Flake</div>
         <div class="card-meta">Lost · cleaner: Jessi Knudsen</div>
@@ -2188,7 +2238,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::chris brandt">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::chris brandt" data-first-visit="2026-01-19">
       <div class="card-header">
         <div class="card-name">Chris Brandt</div>
         <div class="card-meta">Lost · cleaner: Olivia Wilcox</div>
@@ -2200,7 +2250,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::jess moser">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::jess moser" data-first-visit="2026-03-19">
       <div class="card-header">
         <div class="card-name">Jess Moser</div>
         <div class="card-meta">Lost · cleaner: Savannah Iverson</div>
@@ -2212,7 +2262,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::rebecca mackey">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::rebecca mackey" data-first-visit="2026-02-24">
       <div class="card-header">
         <div class="card-name">Rebecca Mackey</div>
         <div class="card-meta">Lost · cleaner: Jessi Knudsen</div>
@@ -2224,7 +2274,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::lauren hansen">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::lauren hansen" data-first-visit="2025-09-30">
       <div class="card-header">
         <div class="card-name">Lauren Hansen</div>
         <div class="card-meta">Lost · cleaner: Olivia Wilcox</div>
@@ -2236,7 +2286,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::tawnya harrison">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::tawnya harrison" data-first-visit="2026-03-16">
       <div class="card-header">
         <div class="card-name">TAWNYA HARRISON</div>
         <div class="card-meta">Lost · cleaner: Olivia Wilcox, Savannah Iverson</div>
@@ -2248,7 +2298,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::melissa boyd">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::melissa boyd" data-first-visit="2026-03-11">
       <div class="card-header">
         <div class="card-name">Melissa Boyd</div>
         <div class="card-meta">Lost · cleaner: Jessi Knudsen</div>
@@ -2260,7 +2310,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::justin bice">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::justin bice" data-first-visit="2026-01-30">
       <div class="card-header">
         <div class="card-name">JUSTIN BICE</div>
         <div class="card-meta">Lost · cleaner: Halee Brady</div>
@@ -2272,7 +2322,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::melissa garside">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::melissa garside" data-first-visit="2026-03-02">
       <div class="card-header">
         <div class="card-name">Melissa Garside</div>
         <div class="card-meta">Lost · cleaner: Jessi Knudsen, Olivia Wilcox</div>
@@ -2284,7 +2334,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::leesa cooper">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::leesa cooper" data-first-visit="2024-02-05">
       <div class="card-header">
         <div class="card-name">Leesa Cooper</div>
         <div class="card-meta">Lost · cleaner: Nicole Leishman</div>
@@ -2296,7 +2346,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::michael kinard">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::michael kinard" data-first-visit="2025-07-23">
       <div class="card-header">
         <div class="card-name">Michael Kinard</div>
         <div class="card-meta">Lost · cleaner: Dakota Fox</div>
@@ -2308,7 +2358,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::kyle packer">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::kyle packer" data-first-visit="2026-02-20">
       <div class="card-header">
         <div class="card-name">Kyle Packer</div>
         <div class="card-meta">Lost · cleaner: Olivia Wilcox</div>
@@ -2320,7 +2370,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_8fd3ab4e090346de8ab0311166aaea79">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_8fd3ab4e090346de8ab0311166aaea79" data-first-visit="2024-11-22">
       <div class="card-header">
         <div class="card-name">Ashleigh Foster</div>
         <div class="card-meta">Monthly · cleaner: Lance Lundahl, Logan Anderson</div>
@@ -2332,7 +2382,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::shawn roghaar">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::shawn roghaar" data-first-visit="2026-02-12">
       <div class="card-header">
         <div class="card-name">Shawn Roghaar</div>
         <div class="card-meta">Lost · cleaner: Jessi Knudsen</div>
@@ -2344,7 +2394,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::bennett anderson">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::bennett anderson" data-first-visit="2025-12-23">
       <div class="card-header">
         <div class="card-name">Bennett Anderson</div>
         <div class="card-meta">Lost · cleaner: Olivia Wilcox</div>
@@ -2356,7 +2406,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::kara nilsson">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::kara nilsson" data-first-visit="2026-02-05">
       <div class="card-header">
         <div class="card-name">Kara Nilsson</div>
         <div class="card-meta">Lost · cleaner: Alyssa Kendall</div>
@@ -2368,7 +2418,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::karen beard">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::karen beard" data-first-visit="2025-12-08">
       <div class="card-header">
         <div class="card-name">Karen Beard</div>
         <div class="card-meta">Lost · cleaner: Halee Brady</div>
@@ -2380,7 +2430,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::jesmill barrena">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::jesmill barrena" data-first-visit="2026-01-29">
       <div class="card-header">
         <div class="card-name">Jesmill Barrena</div>
         <div class="card-meta">Lost · cleaner: Alyssa Kendall</div>
@@ -2392,7 +2442,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::christina noack">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::christina noack" data-first-visit="2025-11-05">
       <div class="card-header">
         <div class="card-name">Christina Noack</div>
         <div class="card-meta">Lost · cleaner: Alyssa Kendall</div>
@@ -2404,7 +2454,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::michael saunders">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::michael saunders" data-first-visit="2026-01-05">
       <div class="card-header">
         <div class="card-name">Michael Saunders</div>
         <div class="card-meta">Lost · cleaner: Olivia Wilcox</div>
@@ -2416,7 +2466,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::steven wolf">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::steven wolf" data-first-visit="2025-07-28">
       <div class="card-header">
         <div class="card-name">Steven Wolf</div>
         <div class="card-meta">Lost · cleaner: Dakota Fox</div>
@@ -2428,7 +2478,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::lisa robinson">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::lisa robinson" data-first-visit="2024-09-11">
       <div class="card-header">
         <div class="card-name">Lisa Robinson</div>
         <div class="card-meta">Lost · cleaner: Halee Brady, Lizette Espana</div>
@@ -2440,7 +2490,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::margie johnson">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::margie johnson" data-first-visit="2026-01-02">
       <div class="card-header">
         <div class="card-name">Margie Johnson</div>
         <div class="card-meta">Lost · cleaner: Alyssa Kendall</div>
@@ -2452,7 +2502,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::jamie mandry">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::jamie mandry" data-first-visit="2026-01-01">
       <div class="card-header">
         <div class="card-name">Jamie Mandry</div>
         <div class="card-meta">Lost · cleaner: Alyssa Kendall</div>
@@ -2464,7 +2514,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::reina tapia">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::reina tapia" data-first-visit="2025-12-20">
       <div class="card-header">
         <div class="card-name">Reina Tapia</div>
         <div class="card-meta">Lost · cleaner: Alyssa Kendall</div>
@@ -2476,7 +2526,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::avery luff">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::avery luff" data-first-visit="2025-12-19">
       <div class="card-header">
         <div class="card-name">Avery Luff</div>
         <div class="card-meta">Lost · cleaner: Alyssa Kendall</div>
@@ -2488,7 +2538,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::wyatt mcdaniel">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::wyatt mcdaniel" data-first-visit="2024-09-10">
       <div class="card-header">
         <div class="card-name">Wyatt McDaniel</div>
         <div class="card-meta">Lost · cleaner: Halee Brady, Samantha Brady</div>
@@ -2500,7 +2550,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::smart scout">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::smart scout" data-first-visit="2025-12-12">
       <div class="card-header">
         <div class="card-name">Smart Scout</div>
         <div class="card-meta">Weekly · <span class="tag tag-est">grandfathered</span> · cleaner: Alyssa Kendall</div>
@@ -2512,7 +2562,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::lindsey smith">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::lindsey smith" data-first-visit="2025-12-11">
       <div class="card-header">
         <div class="card-name">Lindsey Smith</div>
         <div class="card-meta">Lost · cleaner: Halee Brady</div>
@@ -2524,7 +2574,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::robin cooper">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::robin cooper" data-first-visit="2025-12-05">
       <div class="card-header">
         <div class="card-name">Robin Cooper</div>
         <div class="card-meta">Lost · cleaner: Olivia Wilcox</div>
@@ -2536,7 +2586,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::kris willis">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::kris willis" data-first-visit="2025-09-02">
       <div class="card-header">
         <div class="card-name">Kris Willis</div>
         <div class="card-meta">Lost · cleaner: Olivia Wilcox</div>
@@ -2548,7 +2598,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::cassidy carter">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::cassidy carter" data-first-visit="2025-12-08">
       <div class="card-header">
         <div class="card-name">Cassidy Carter</div>
         <div class="card-meta">Lost · cleaner: Halee Brady</div>
@@ -2560,7 +2610,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::richard gill">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::richard gill" data-first-visit="2025-09-05">
       <div class="card-header">
         <div class="card-name">Richard Gill</div>
         <div class="card-meta">Lost · cleaner: Halee Brady</div>
@@ -2572,7 +2622,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::austin albrecht">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::austin albrecht" data-first-visit="2025-11-26">
       <div class="card-header">
         <div class="card-name">Austin Albrecht</div>
         <div class="card-meta">Lost · cleaner: Halee Brady</div>
@@ -2584,7 +2634,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::sharron henrie">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::sharron henrie" data-first-visit="2025-10-27">
       <div class="card-header">
         <div class="card-name">Sharron Henrie</div>
         <div class="card-meta">Lost · cleaner: Alyssa Kendall, Halee Brady</div>
@@ -2596,7 +2646,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::shelli allen">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::shelli allen" data-first-visit="2024-01-24">
       <div class="card-header">
         <div class="card-name">Shelli Allen</div>
         <div class="card-meta">Lost · cleaner: Nicole Leishman</div>
@@ -2608,7 +2658,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::forrest rudd">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::forrest rudd" data-first-visit="2025-09-26">
       <div class="card-header">
         <div class="card-name">Forrest Rudd</div>
         <div class="card-meta">Lost · cleaner: Olivia Wilcox</div>
@@ -2620,7 +2670,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::kellie garrison">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::kellie garrison" data-first-visit="2025-02-17">
       <div class="card-header">
         <div class="card-name">Kellie Garrison</div>
         <div class="card-meta">Lost · cleaner: Alyssa Kendall</div>
@@ -2632,7 +2682,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::matteo yutrzenka">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::matteo yutrzenka" data-first-visit="2024-08-21">
       <div class="card-header">
         <div class="card-name">Matteo Yutrzenka</div>
         <div class="card-meta">Lost · cleaner: Brook Jenkins, Lizette Espana</div>
@@ -2644,7 +2694,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::sadie eades">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::sadie eades" data-first-visit="2024-01-31">
       <div class="card-header">
         <div class="card-name">Sadie Eades</div>
         <div class="card-meta">Lost · cleaner: Brendan Woolcott</div>
@@ -2656,7 +2706,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::carson frandsen">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::carson frandsen" data-first-visit="2025-09-20">
       <div class="card-header">
         <div class="card-name">Carson Frandsen</div>
         <div class="card-meta">Lost · cleaner: Halee Brady</div>
@@ -2668,7 +2718,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::kylee laprevote">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::kylee laprevote" data-first-visit="2024-05-23">
       <div class="card-header">
         <div class="card-name">Kylee Laprevote</div>
         <div class="card-meta">Paused · cleaner: Jaylee Rothwell, Kendree Hamblin, Lizette Espana</div>
@@ -2680,7 +2730,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::bruce nielsen">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::bruce nielsen" data-first-visit="2025-06-18">
       <div class="card-header">
         <div class="card-name">Bruce Nielsen</div>
         <div class="card-meta">Lost · cleaner: Alyssa Kendall</div>
@@ -2692,7 +2742,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::tisha">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::tisha" data-first-visit="2025-09-08">
       <div class="card-header">
         <div class="card-name">Tisha</div>
         <div class="card-meta">Lost · cleaner: Alyssa Kendall, Olivia Wilcox</div>
@@ -2704,7 +2754,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::susan koch">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::susan koch" data-first-visit="2025-09-08">
       <div class="card-header">
         <div class="card-name">Susan Koch</div>
         <div class="card-meta">Lost · cleaner: Olivia Wilcox</div>
@@ -2716,7 +2766,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::beverly duersch">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::beverly duersch" data-first-visit="2024-09-06">
       <div class="card-header">
         <div class="card-name">Beverly Duersch</div>
         <div class="card-meta">Lost · cleaner: Halee Brady, Jaylee Rothwell</div>
@@ -2728,7 +2778,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::sarah timmerman">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::sarah timmerman" data-first-visit="2025-02-03">
       <div class="card-header">
         <div class="card-name">Sarah Timmerman</div>
         <div class="card-meta">Lost · cleaner: Halee Brady, Hero Fam</div>
@@ -2740,7 +2790,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::sandra orr">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::sandra orr" data-first-visit="2025-08-25">
       <div class="card-header">
         <div class="card-name">Sandra Orr</div>
         <div class="card-meta">Lost · cleaner: Halee Brady</div>
@@ -2752,7 +2802,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::aubry brown">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::aubry brown" data-first-visit="2025-07-30">
       <div class="card-header">
         <div class="card-name">Aubry Brown</div>
         <div class="card-meta">Lost · cleaner: Dakota Fox</div>
@@ -2764,7 +2814,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::cameron gallacher">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::cameron gallacher" data-first-visit="2025-07-28">
       <div class="card-header">
         <div class="card-name">Cameron Gallacher</div>
         <div class="card-meta">Lost · cleaner: Halee Brady, Kimber Johnson</div>
@@ -2776,7 +2826,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::kyle barney">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::kyle barney" data-first-visit="2025-07-11">
       <div class="card-header">
         <div class="card-name">Kyle Barney</div>
         <div class="card-meta">Lost · cleaner: Dakota Fox</div>
@@ -2788,7 +2838,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::victoria knudsen">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::victoria knudsen" data-first-visit="2025-07-10">
       <div class="card-header">
         <div class="card-name">Victoria Knudsen</div>
         <div class="card-meta">Lost · cleaner: Dakota Fox</div>
@@ -2800,7 +2850,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::ryan rigby">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::ryan rigby" data-first-visit="2025-01-23">
       <div class="card-header">
         <div class="card-name">Ryan Rigby</div>
         <div class="card-meta">Lost · cleaner: Alyssa Kendall</div>
@@ -2812,7 +2862,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::jessica gardiner">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::jessica gardiner" data-first-visit="2025-05-05">
       <div class="card-header">
         <div class="card-name">Jessica Gardiner</div>
         <div class="card-meta">Lost · cleaner: Dakota Fox</div>
@@ -2824,7 +2874,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::sa siilata">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::sa siilata" data-first-visit="2025-06-30">
       <div class="card-header">
         <div class="card-name">Sa Siilata</div>
         <div class="card-meta">Lost · cleaner: Alyssa Kendall</div>
@@ -2836,7 +2886,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::morgan mickelsen">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::morgan mickelsen" data-first-visit="2025-06-26">
       <div class="card-header">
         <div class="card-name">Morgan Mickelsen</div>
         <div class="card-meta">Lost · cleaner: Halee Brady</div>
@@ -2848,7 +2898,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::anna lindley">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::anna lindley" data-first-visit="2025-04-22">
       <div class="card-header">
         <div class="card-name">Anna Lindley</div>
         <div class="card-meta">Lost · cleaner: Alyssa Kendall</div>
@@ -2860,7 +2910,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::byron sessions">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::byron sessions" data-first-visit="2025-06-16">
       <div class="card-header">
         <div class="card-name">Byron Sessions</div>
         <div class="card-meta">Lost · cleaner: Alyssa Kendall</div>
@@ -2872,7 +2922,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::mike cummings">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::mike cummings" data-first-visit="2025-06-03">
       <div class="card-header">
         <div class="card-name">Mike Cummings</div>
         <div class="card-meta">Lost · cleaner: Alyssa Kendall</div>
@@ -2884,7 +2934,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::leslie hill">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::leslie hill" data-first-visit="2024-05-22">
       <div class="card-header">
         <div class="card-name">Leslie Hill</div>
         <div class="card-meta">Lost · cleaner: Abbey Shelton</div>
@@ -2896,7 +2946,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::cindy downs">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::cindy downs" data-first-visit="2025-05-27">
       <div class="card-header">
         <div class="card-name">Cindy Downs</div>
         <div class="card-meta">Lost · cleaner: Dakota Fox</div>
@@ -2908,7 +2958,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::jonathan van huss">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::jonathan van huss" data-first-visit="2025-05-27">
       <div class="card-header">
         <div class="card-name">Jonathan Van Huss</div>
         <div class="card-meta">Lost · cleaner: Dakota Fox</div>
@@ -2920,7 +2970,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::breanne">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::breanne" data-first-visit="2025-05-21">
       <div class="card-header">
         <div class="card-name">Breanne</div>
         <div class="card-meta">Lost · cleaner: Dakota Fox</div>
@@ -2932,7 +2982,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::danyel goldsberry">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::danyel goldsberry" data-first-visit="2025-04-23">
       <div class="card-header">
         <div class="card-name">Danyel goldsberry</div>
         <div class="card-meta">Lost · cleaner: Jenna Deinert</div>
@@ -2944,7 +2994,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::jennifer lewis">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::jennifer lewis" data-first-visit="2024-04-15">
       <div class="card-header">
         <div class="card-name">Jennifer Lewis</div>
         <div class="card-meta">Paused · cleaner: Brittony Matson, Kiya Thomas, Lizette Espana</div>
@@ -2956,7 +3006,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::denise conover">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::denise conover" data-first-visit="2025-05-13">
       <div class="card-header">
         <div class="card-name">Denise Conover</div>
         <div class="card-meta">Lost · cleaner: Halee Brady</div>
@@ -2968,7 +3018,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::kathyleen smith">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::kathyleen smith" data-first-visit="2024-10-14">
       <div class="card-header">
         <div class="card-name">Kathyleen Smith</div>
         <div class="card-meta">Lost · cleaner: Halee Brady, Hero Fam</div>
@@ -2980,7 +3030,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::scott hampton">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::scott hampton" data-first-visit="2024-10-09">
       <div class="card-header">
         <div class="card-name">Scott Hampton</div>
         <div class="card-meta">Lost · cleaner: Devon Ward, Helaman Egan, Tyler Whetten, Zack Kehoe</div>
@@ -2992,7 +3042,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::brianna williams">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::brianna williams" data-first-visit="2024-07-26">
       <div class="card-header">
         <div class="card-name">Brianna Williams</div>
         <div class="card-meta">Lost · cleaner: Lizette Espana</div>
@@ -3004,7 +3054,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::josh thompson">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::josh thompson" data-first-visit="2025-04-29">
       <div class="card-header">
         <div class="card-name">Josh Thompson</div>
         <div class="card-meta">Lost · cleaner: Dakota Fox</div>
@@ -3016,7 +3066,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::kortni o’driscoll">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::kortni o’driscoll" data-first-visit="2025-04-15">
       <div class="card-header">
         <div class="card-name">Kortni O’Driscoll</div>
         <div class="card-meta">Lost · cleaner: Alyssa Kendall</div>
@@ -3028,7 +3078,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::sarah sadler">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::sarah sadler" data-first-visit="2025-04-07">
       <div class="card-header">
         <div class="card-name">Sarah Sadler</div>
         <div class="card-meta">Lost · cleaner: Halee Brady, Jenna Deinert</div>
@@ -3040,7 +3090,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::jaron humphreys">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::jaron humphreys" data-first-visit="2025-04-11">
       <div class="card-header">
         <div class="card-name">Jaron Humphreys</div>
         <div class="card-meta">Lost · cleaner: Halee Brady</div>
@@ -3052,7 +3102,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::stephanie christiensen">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::stephanie christiensen" data-first-visit="2025-03-21">
       <div class="card-header">
         <div class="card-name">Stephanie Christiensen</div>
         <div class="card-meta">Lost · cleaner: Halee Brady</div>
@@ -3064,7 +3114,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::don knighton">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::don knighton" data-first-visit="2024-09-16">
       <div class="card-header">
         <div class="card-name">Don Knighton</div>
         <div class="card-meta">Lost · cleaner: Halee Brady, Jaylee Rothwell, Lizette Espana</div>
@@ -3076,7 +3126,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::brenda tekell">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::brenda tekell" data-first-visit="2025-03-20">
       <div class="card-header">
         <div class="card-name">Brenda Tekell</div>
         <div class="card-meta">Lost · cleaner: Halee Brady, Jaylee Rothwell</div>
@@ -3088,7 +3138,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::rebecca anthony">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::rebecca anthony" data-first-visit="2025-02-18">
       <div class="card-header">
         <div class="card-name">Rebecca Anthony</div>
         <div class="card-meta">Lost · cleaner: Alyssa Kendall</div>
@@ -3100,7 +3150,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::jake neely">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::jake neely" data-first-visit="2025-03-20">
       <div class="card-header">
         <div class="card-name">Jake Neely</div>
         <div class="card-meta">Lost · cleaner: Jenna Deinert</div>
@@ -3112,7 +3162,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::jaime caliendo">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::jaime caliendo" data-first-visit="2025-02-24">
       <div class="card-header">
         <div class="card-name">Jaime Caliendo</div>
         <div class="card-meta">Lost · cleaner: Alyssa Kendall</div>
@@ -3124,7 +3174,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::kim bristol">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::kim bristol" data-first-visit="2025-03-03">
       <div class="card-header">
         <div class="card-name">Kim Bristol</div>
         <div class="card-meta">Lost · cleaner: Alyssa Kendall</div>
@@ -3136,7 +3186,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::maryn lindley">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::maryn lindley" data-first-visit="2025-02-28">
       <div class="card-header">
         <div class="card-name">Maryn Lindley</div>
         <div class="card-meta">Lost · cleaner: Halee Brady</div>
@@ -3148,7 +3198,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::sara cox">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::sara cox" data-first-visit="2024-10-17">
       <div class="card-header">
         <div class="card-name">Sara Cox</div>
         <div class="card-meta">Lost · cleaner: Goldie Wihongi, Tyler Whetten</div>
@@ -3160,7 +3210,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::laura williams">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::laura williams" data-first-visit="2024-01-04">
       <div class="card-header">
         <div class="card-name">Laura Williams</div>
         <div class="card-meta">Lost · cleaner: Jessica Bendeza</div>
@@ -3172,7 +3222,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::mardee warby">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::mardee warby" data-first-visit="2025-01-28">
       <div class="card-header">
         <div class="card-name">MarDee Warby</div>
         <div class="card-meta">Lost · cleaner: Halee Brady, Hero Fam</div>
@@ -3184,7 +3234,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::mengyan li">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::mengyan li" data-first-visit="2025-01-28">
       <div class="card-header">
         <div class="card-name">Mengyan Li</div>
         <div class="card-meta">Lost · cleaner: Alyssa Kendall</div>
@@ -3196,7 +3246,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::gina johnston">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::gina johnston" data-first-visit="2025-01-20">
       <div class="card-header">
         <div class="card-name">Gina Johnston</div>
         <div class="card-meta">Lost · cleaner: Halee Brady</div>
@@ -3208,7 +3258,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::karen cantwell">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::karen cantwell" data-first-visit="2024-02-16">
       <div class="card-header">
         <div class="card-name">Karen Cantwell</div>
         <div class="card-meta">Lost · cleaner: Goldie Wihongi, Jezmin Pressett, Lance Lundahl, Nicole Leishman</div>
@@ -3220,7 +3270,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::samantha scholle">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::samantha scholle" data-first-visit="2025-01-16">
       <div class="card-header">
         <div class="card-name">Samantha Scholle</div>
         <div class="card-meta">Lost · cleaner: Alyssa Kendall, Hero Fam</div>
@@ -3232,7 +3282,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::sarah neilson">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::sarah neilson" data-first-visit="2025-01-03">
       <div class="card-header">
         <div class="card-name">Sarah Neilson</div>
         <div class="card-meta">Lost · cleaner: Alyssa Kendall, Halee Brady, Hero Fam</div>
@@ -3244,7 +3294,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::karen vaughan">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::karen vaughan" data-first-visit="2025-01-06">
       <div class="card-header">
         <div class="card-name">Karen Vaughan</div>
         <div class="card-meta">Lost · cleaner: Halee Brady, Hero Fam</div>
@@ -3256,7 +3306,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::zsuzsanna eberling">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::zsuzsanna eberling" data-first-visit="2024-12-10">
       <div class="card-header">
         <div class="card-name">Zsuzsanna Eberling</div>
         <div class="card-meta">Lost · cleaner: Butch Lozier, Goldie Wihongi</div>
@@ -3268,7 +3318,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::gayle brackner">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::gayle brackner" data-first-visit="2024-12-20">
       <div class="card-header">
         <div class="card-name">Gayle Brackner</div>
         <div class="card-meta">Lost · cleaner: Hero Fam, Laura Anderson</div>
@@ -3280,7 +3330,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::leah hayes">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::leah hayes" data-first-visit="2024-12-11">
       <div class="card-header">
         <div class="card-name">Leah Hayes</div>
         <div class="card-meta">Lost · cleaner: Halee Brady</div>
@@ -3292,7 +3342,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::ann robins">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::ann robins" data-first-visit="2024-12-10">
       <div class="card-header">
         <div class="card-name">Ann Robins</div>
         <div class="card-meta">Lost · cleaner: Halee Brady</div>
@@ -3304,7 +3354,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::kyle day">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::kyle day" data-first-visit="2024-12-05">
       <div class="card-header">
         <div class="card-name">Kyle Day</div>
         <div class="card-meta">Lost · cleaner: Butch Lozier, Goldie Wihongi</div>
@@ -3316,7 +3366,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::johnson hampton">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::johnson hampton" data-first-visit="2024-12-03">
       <div class="card-header">
         <div class="card-name">Johnson Hampton</div>
         <div class="card-meta">Lost · cleaner: Halee Brady</div>
@@ -3328,7 +3378,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::doris bennett">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::doris bennett" data-first-visit="2024-12-02">
       <div class="card-header">
         <div class="card-name">Doris Bennett</div>
         <div class="card-meta">Lost · cleaner: Halee Brady, Hero Fam</div>
@@ -3340,7 +3390,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::rjt excavating">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::rjt excavating" data-first-visit="">
       <div class="card-header">
         <div class="card-name">RJT Excavating</div>
         <div class="card-meta">Weekly · <span class="tag tag-est">grandfathered</span></div>
@@ -3352,7 +3402,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::las vegas aviation">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::las vegas aviation" data-first-visit="">
       <div class="card-header">
         <div class="card-name">Las Vegas Aviation</div>
         <div class="card-meta">Monthly · <span class="tag tag-est">grandfathered</span></div>
@@ -3364,7 +3414,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::buffalo wild wings">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::buffalo wild wings" data-first-visit="">
       <div class="card-header">
         <div class="card-name">Buffalo Wild Wings</div>
         <div class="card-meta">Bi-Weekly · <span class="tag tag-est">grandfathered</span></div>
@@ -3376,7 +3426,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::cody davis (business)">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::cody davis (business)" data-first-visit="">
       <div class="card-header">
         <div class="card-name">Cody Davis (Business)</div>
         <div class="card-meta">Monthly · <span class="tag tag-est">grandfathered</span></div>
@@ -3388,7 +3438,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::lss insurance">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::lss insurance" data-first-visit="">
       <div class="card-header">
         <div class="card-name">LSS Insurance</div>
         <div class="card-meta">Weekly · <span class="tag tag-est">grandfathered</span></div>
@@ -3400,7 +3450,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="name::vision one mgt">
+    <div class="card" role="button" tabindex="0" data-customer-id="name::vision one mgt" data-first-visit="">
       <div class="card-header">
         <div class="card-name">Vision One Mgt</div>
         <div class="card-meta">Weekly · <span class="tag tag-est">grandfathered</span></div>
@@ -3412,7 +3462,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_9c7d7e69ec6548b09d693700e8316b7d">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_9c7d7e69ec6548b09d693700e8316b7d" data-first-visit="">
       <div class="card-header">
         <div class="card-name">Eric Crockett</div>
         <div class="card-meta">Active</div>
@@ -3424,7 +3474,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_b285bb9304434ba6b9ea2b90a37134f5">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_b285bb9304434ba6b9ea2b90a37134f5" data-first-visit="">
       <div class="card-header">
         <div class="card-name">Jan Hertzfeld</div>
         <div class="card-meta">Active</div>
@@ -3436,7 +3486,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_e37b7645bf7b446eb2c3a9af4f399531">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_e37b7645bf7b446eb2c3a9af4f399531" data-first-visit="">
       <div class="card-header">
         <div class="card-name">Ashland Kelson</div>
         <div class="card-meta">Active</div>
@@ -3448,7 +3498,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_ca4d6c488a96490d8247695fde2aa44f">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_ca4d6c488a96490d8247695fde2aa44f" data-first-visit="">
       <div class="card-header">
         <div class="card-name">Shawn Shey</div>
         <div class="card-meta">Active</div>
@@ -3460,7 +3510,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_b75c1019cc814c7ca8950cb30b3b47a8">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_b75c1019cc814c7ca8950cb30b3b47a8" data-first-visit="">
       <div class="card-header">
         <div class="card-name">Tanner Dance</div>
         <div class="card-meta">Active</div>
@@ -3472,7 +3522,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_ab92ea9c2e014d3b88028d5175d1436a">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_ab92ea9c2e014d3b88028d5175d1436a" data-first-visit="">
       <div class="card-header">
         <div class="card-name">Melanie Ponce</div>
         <div class="card-meta">Active</div>
@@ -3484,7 +3534,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_30d13375f78240c6b4370a7d32da552a">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_30d13375f78240c6b4370a7d32da552a" data-first-visit="">
       <div class="card-header">
         <div class="card-name">Giovannie Argueta</div>
         <div class="card-meta">Active</div>
@@ -3496,7 +3546,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_55cd9d1280f1434a92f3427f3f2aac2e">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_55cd9d1280f1434a92f3427f3f2aac2e" data-first-visit="">
       <div class="card-header">
         <div class="card-name">Carson Denniston</div>
         <div class="card-meta">Active</div>
@@ -3508,7 +3558,7 @@
     </div>
     
 
-    <div class="card" role="button" tabindex="0" data-customer-id="cus_ba705f19feb54a8a89745d090d1f440f">
+    <div class="card" role="button" tabindex="0" data-customer-id="cus_ba705f19feb54a8a89745d090d1f440f" data-first-visit="">
       <div class="card-header">
         <div class="card-name">Jerianne Gabriel</div>
         <div class="card-meta">Active</div>
@@ -3565,6 +3615,39 @@
 
   const CUST_BY_ID = Object.create(null);
   for (const c of CUSTOMERS) CUST_BY_ID[c.customer_id] = c;
+
+  // ---- 2026-07-18: cohort filter ------------------------------------
+  // Default: "new customers only" — first_visit >= 2026-06-15. Catches
+  // Nate Richards (6/29) + late-June signups so we start with the natural
+  // new-process cohort, not the full historical roster. Persisted per user
+  // in localStorage so their choice sticks between sessions.
+  const COHORT_CUTOFF_ISO = '2026-06-15';
+  const COHORT_LS_KEY     = 'hc:pipeline:v1:cohort';
+  const COHORT = {
+    mode: null,   // 'new' | 'all'
+    setMode: function(m) {
+      const clean = (m === 'all') ? 'all' : 'new';
+      this.mode = clean;
+      try { localStorage.setItem(COHORT_LS_KEY, clean); } catch(_){}
+    },
+    load: function() {
+      let stored = null;
+      try { stored = localStorage.getItem(COHORT_LS_KEY); } catch(_){}
+      this.mode = (stored === 'all') ? 'all' : 'new';
+    },
+    passes: function(c) {
+      if (this.mode === 'all') return true;
+      const fv = (c && c.first_visit) ? String(c.first_visit).slice(0, 10) : '';
+      if (!fv) return false;   // no first visit → historical / partial record; hide
+      return fv >= COHORT_CUTOFF_ISO;
+    }
+  };
+  COHORT.load();
+
+  // Convenience: return the CUSTOMERS array filtered by the current cohort.
+  function customersInCohort() {
+    return CUSTOMERS.filter(function(c){ return COHORT.passes(c); });
+  }
 
   // ---- Supabase REST wrapper (same shape as build_artifact.py's _sb) ----
   async function sb(path, init) {
@@ -3704,12 +3787,66 @@
     document.getElementById('tabPanelJaylee').hidden = (t !== 'jaylee');
     // Hide the top KPI strip on focus tabs (each tab has its own stats)
     document.getElementById('kpiStrip').style.display = (t === 'all' ? '' : 'none');
+    applyCohortFilter();
     if (t === 'halee')  renderFocusTab('halee',  document.getElementById('tabPanelHalee'));
     if (t === 'jaylee') renderFocusTab('jaylee', document.getElementById('tabPanelJaylee'));
   }
 
   document.querySelectorAll('.tab-nav button').forEach(function(btn){
     btn.addEventListener('click', function(){ setTab(btn.getAttribute('data-tab')); });
+  });
+
+  // ---- Cohort toggle (2026-07-18) ----
+  // Applies the cohort filter to:
+  //   1. All customers tab — cards hidden via CSS .filter-hidden class
+  //   2. Focus tabs — haleeCustomers()/jayleeCustomers() already gate on COHORT
+  //   3. Tab counts (both nav + KPI strip) — recomputed against COHORT
+  function applyCohortFilter() {
+    // 1. All-cards visibility
+    const cards = document.querySelectorAll('#tabPanelAll .card[data-first-visit]');
+    let visibleTotal = 0, visibleActive = 0, visibleLost = 0;
+    cards.forEach(function(card){
+      const fv = card.getAttribute('data-first-visit') || '';
+      const cid = card.getAttribute('data-customer-id');
+      const c = CUST_BY_ID[cid];
+      const passes = COHORT.passes(c || {first_visit: fv});
+      card.classList.toggle('filter-hidden', !passes);
+      if (passes) {
+        visibleTotal += 1;
+        const ps = (c && c.pipeline_stage) || {};
+        if (ps.lost) visibleLost += 1;
+        else if (typeof ps.current_stage === 'number' && ps.current_stage >= 1 && ps.current_stage <= 10) visibleActive += 1;
+      }
+    });
+
+    // 2. Recompute tab-count badges + KPI strip values.
+    const inCohort = customersInCohort();
+    const haleeCt  = haleeCustomers().length;
+    const jayleeCt = jayleeCustomers().length;
+    const setText = function(id, v) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = String(v);
+    };
+    setText('tabCountAll',    inCohort.length);
+    setText('tabCountHalee',  haleeCt);
+    setText('tabCountJaylee', jayleeCt);
+    setText('kpiTotal',       visibleTotal);
+    setText('kpiActive',      visibleActive);
+    setText('kpiHalee',       haleeCt);
+    setText('kpiJaylee',      jayleeCt);
+    setText('kpiLost',        visibleLost);
+
+    // 3. Highlight the active cohort button
+    document.querySelectorAll('.filter-toggle button').forEach(function(btn){
+      btn.classList.toggle('on', btn.getAttribute('data-cohort') === COHORT.mode);
+    });
+  }
+
+  document.querySelectorAll('.filter-toggle button').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      COHORT.setMode(btn.getAttribute('data-cohort'));
+      renderTab();
+    });
   });
 
   // ---- Focus-tab date helpers ----
@@ -3746,10 +3883,14 @@
   }
 
   // ---- Filtering: which customers belong to which focus tab ----
+  // Both functions honour the cohort filter (2026-07-18) — historical
+  // customers are hidden by default so Halee/Jaylee only see the new-process
+  // cohort. Flip the cohort toggle at the top to see everyone.
   function haleeCustomers() {
     // Stage 8 (First check-in due) or 9 (Second check-in due). Owner is
     // reliably 'halee' for these — filter on both for defense in depth.
     return CUSTOMERS.filter(function(c){
+      if (!COHORT.passes(c)) return false;
       const ps = c.pipeline_stage || {};
       const cs = ps.current_stage;
       return (cs === 8 || cs === 9) && ps.next_action_owner === 'halee';
@@ -3757,6 +3898,7 @@
   }
   function jayleeCustomers() {
     return CUSTOMERS.filter(function(c){
+      if (!COHORT.passes(c)) return false;
       const ps = c.pipeline_stage || {};
       const cs = ps.current_stage;
       // Stage 2 (Onboarding call), stage 5 (Recurring pitch). Explicit
