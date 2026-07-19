@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260719T161157">
+<meta name="hc-build-id" content="20260719T161451">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -309,16 +309,12 @@
   .cal-chip.urgent { background: var(--hero-red); }
   .cal-chip.call   { background: var(--slate); }
   .cal-chip.visit  { background: #7C3AED; }   /* purple — in-person first recurring visit */
-  /* 2026-07-19: color-code first-time cleans by job type so Halee can
-     distinguish Move In/Out (higher urgency, home in flux) from the routine
-     Intro Cleans at a glance. */
-  .cal-chip.newjob        { background: #0891B2; }   /* teal — default / Intro Clean */
-  .cal-chip.newjob-intro  { background: #0891B2; }   /* teal — Intro Clean */
-  .cal-chip.newjob-move   { background: #EA580C; }   /* orange — Move In/Out */
-  .cal-chip.newjob-deep   { background: #059669; }   /* emerald — Deep Clean */
-  .cal-chip.newjob-post   { background: #B45309; }   /* amber — Post-Construction */
-  .cal-chip.newjob-custom { background: #4F46E5; }   /* indigo — Custom Clean */
-  .cal-chip.newjob-one    { background: #6B7280; }   /* gray — One-Time */
+  /* 2026-07-19 (revised): only two colors on Halee's first-time cleans.
+     Move In/Out is elevated (home in flux, tighter turnaround, one-shot).
+     Everything else — Intro Clean, Deep Clean, etc. — shares the teal
+     default. */
+  .cal-chip.newjob      { background: #0891B2; }   /* teal — any new-customer first clean */
+  .cal-chip.newjob-move { background: #EA580C; }   /* orange — Move In/Out */
   .cal-chip.info   { background: #E4E7EB; color: var(--text-muted); }
   .cal-chip:hover { opacity: 0.85; }
   /* Group list rows (categorized customer lists) */
@@ -4031,18 +4027,12 @@
     return base;
   }
 
-  // Map a job_type name to the color-coded newjob variant. Same string
-  // matching as shortJobTypeLabel (2026-07-19). Falls back to plain
-  // teal 'newjob' when the type is unknown or missing.
+  // Map a job_type name to a chip variant. Two buckets only (Cam 2026-07-19):
+  // Move In/Out → orange, everything else → default teal 'newjob'.
   function newJobKindFor(jt) {
     if (!jt) return 'newjob';
     const s = String(jt).toLowerCase();
-    if (s.indexOf('move')   >= 0) return 'newjob-move';
-    if (s.indexOf('deep')   >= 0) return 'newjob-deep';
-    if (s.indexOf('intro')  >= 0) return 'newjob-intro';
-    if (s.indexOf('post')   >= 0) return 'newjob-post';
-    if (s.indexOf('custom') >= 0) return 'newjob-custom';
-    if (s.indexOf('one')    >= 0) return 'newjob-one';
+    if (s.indexOf('move') >= 0) return 'newjob-move';
     return 'newjob';
   }
   function chipKindFor(cs, isToday, who, c) {
