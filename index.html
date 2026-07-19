@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260719T161451">
+<meta name="hc-build-id" content="20260719T162241">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -4082,14 +4082,14 @@
   }
 
   // ---- Focus tab renderer (Halee + Jaylee share the same shape) ----
-  // Halee 2026-07-18: 4-week rolling calendar (28 days) instead of 1-week.
-  // Jaylee still uses the 1-week view (short-cycle, phone-driven work).
+  // Both Halee and Jaylee get the 4-week rolling calendar (Cam 2026-07-19).
+  // Tailored per identity via `who` — different stat cards, different
+  // chip labels, different grouped lists at the bottom.
   function renderFocusTab(who, container) {
     const custs = (who === 'halee' ? haleeCustomers() : jayleeCustomers());
     const today = todayDate();
     const wkStart = weekStart(today);
-    // Halee: 4 weeks = 28 days (from this week's Monday). Jaylee: 1 week.
-    const numWeeks = (who === 'halee') ? 4 : 1;
+    const numWeeks = 4;
     const windowEnd = new Date(wkStart); windowEnd.setDate(windowEnd.getDate() + (numWeeks * 7) - 1);
     const days = Array.from({length: numWeeks * 7}, function(_, i){
       const d = new Date(wkStart); d.setDate(d.getDate() + i); return d;
@@ -4148,7 +4148,7 @@
       const s2 = custs.filter(function(c){
         const ps = c.pipeline_stage || {};
         const due = actionDueDate(c);
-        return ps.current_stage === 2 && due && due >= wkStart && due <= wkEnd;
+        return ps.current_stage === 2 && due && due >= wkStart && due <= windowEnd;
       }).length;
       const s5 = custs.filter(function(c){
         const ps = c.pipeline_stage || {};
@@ -4166,10 +4166,10 @@
         });
       }).length;
       statsHtml = statCards([
-        ['Today',             todayList.length + overdue.length, true],
-        ['Onboarding calls',  s2, false],
-        ['Recurring pitches', s5, false],
-        ['Won this month',    wonThisMonth, false]
+        ['Today',                    todayList.length + overdue.length, true],
+        ['Onboarding calls (30d)',   s2, false],
+        ['Recurring pitches (30d)',  s5, false],
+        ['Won this month',           wonThisMonth, false]
       ]);
     }
 
@@ -4201,69 +4201,44 @@
          }).join('') + '</div>')
       : '<div class="today-strip empty">Nothing on your plate today. 🎉 Scroll to see the week ahead.</div>';
 
-    // Calendar: 4-week grid for Halee, 1-week grid for Jaylee.
-    let weekHtml;
-    if (who === 'halee') {
-      // Weekday header row (Mon..Sun) + one row per week.
-      const dayHeadNames = ['MON','TUE','WED','THU','FRI','SAT','SUN'];
-      const headHtml =
-        '<div class="month-cal-head">' +
-          '<div class="week-col-head"></div>' +
-          dayHeadNames.map(function(n){ return '<div class="day-head">' + n + '</div>'; }).join('') +
-        '</div>';
-      const rowsHtml = Array.from({length: numWeeks}, function(_, w){
-        const rowStart = new Date(wkStart); rowStart.setDate(rowStart.getDate() + (w * 7));
-        const label = rowStart.toLocaleDateString(undefined, {month:'short', day:'numeric'});
-        const cells = Array.from({length: 7}, function(_, i){
-          const dayIdx = w * 7 + i;
-          const d = days[dayIdx];
-          const isToday = isoOf(d) === isoOf(today);
-          const isPast = !isToday && d < today;
-          const chips = byDay[dayIdx].map(function(c){
-            const cs = (c.pipeline_stage || {}).current_stage;
-            const kind = chipKindFor(cs, isToday, who, c);
-            const label = shortLabelFor(c, cs, who);
-            return '<div class="cal-chip ' + kind + '" data-open-cid="' + esc(c.customer_id) + '" ' +
-                   'title="' + esc(label) + '">' +
-                   esc(label) + '</div>';
-          }).join('');
-          const cls = 'day-cell' + (isToday ? ' today' : (isPast ? ' past' : ''));
-          return '<div class="' + cls + '">' +
-            '<div class="day-num">' + fmtDayNum(d) + '</div>' +
-            chips +
-          '</div>';
+    // 4-week rolling calendar for both Halee and Jaylee.
+    const dayHeadNames = ['MON','TUE','WED','THU','FRI','SAT','SUN'];
+    const headHtml =
+      '<div class="month-cal-head">' +
+        '<div class="week-col-head"></div>' +
+        dayHeadNames.map(function(n){ return '<div class="day-head">' + n + '</div>'; }).join('') +
+      '</div>';
+    const rowsHtml = Array.from({length: numWeeks}, function(_, w){
+      const rowStart = new Date(wkStart); rowStart.setDate(rowStart.getDate() + (w * 7));
+      const label = rowStart.toLocaleDateString(undefined, {month:'short', day:'numeric'});
+      const cells = Array.from({length: 7}, function(_, i){
+        const dayIdx = w * 7 + i;
+        const d = days[dayIdx];
+        const isToday = isoOf(d) === isoOf(today);
+        const isPast = !isToday && d < today;
+        const chips = byDay[dayIdx].map(function(c){
+          const cs = (c.pipeline_stage || {}).current_stage;
+          const kind = chipKindFor(cs, isToday, who, c);
+          const label = shortLabelFor(c, cs, who);
+          return '<div class="cal-chip ' + kind + '" data-open-cid="' + esc(c.customer_id) + '" ' +
+                 'title="' + esc(label) + '">' +
+                 esc(label) + '</div>';
         }).join('');
-        return '<div class="month-cal-row">' +
-          '<div class="week-label">Week of<br>' + esc(label) + '</div>' +
-          cells +
+        const cls = 'day-cell' + (isToday ? ' today' : (isPast ? ' past' : ''));
+        return '<div class="' + cls + '">' +
+          '<div class="day-num">' + fmtDayNum(d) + '</div>' +
+          chips +
         '</div>';
       }).join('');
-      weekHtml =
-        '<h3 class="section-head">Next 4 weeks — your calendar</h3>' +
-        '<div class="section-help">Rolling 30-day view. Click any chip to open that customer\'s panel.</div>' +
-        '<div class="month-cal">' + headHtml + rowsHtml + '</div>';
-    } else {
-      weekHtml =
-        '<h3 class="section-head">This week — your calendar</h3>' +
-        '<div class="week-cal">' +
-          days.map(function(d, i){
-            const isToday = isoOf(d) === isoOf(today);
-            const chips = byDay[i].map(function(c){
-              const cs = (c.pipeline_stage || {}).current_stage;
-              const kind = chipKindFor(cs, isToday, who, c);
-              const label = shortLabelFor(c, cs, who);
-              return '<div class="cal-chip ' + kind + '" data-open-cid="' + esc(c.customer_id) + '" ' +
-                     'title="' + esc(label) + '">' +
-                     esc(label) + '</div>';
-            }).join('');
-            return '<div class="week-day' + (isToday ? ' today' : '') + '">' +
-              '<div class="day-head">' + esc(fmtDayHead(d)) + '</div>' +
-              '<div class="day-num">' + fmtDayNum(d) + '</div>' +
-              chips +
-            '</div>';
-          }).join('') +
-        '</div>';
-    }
+      return '<div class="month-cal-row">' +
+        '<div class="week-label">Week of<br>' + esc(label) + '</div>' +
+        cells +
+      '</div>';
+    }).join('');
+    const weekHtml =
+      '<h3 class="section-head">Next 4 weeks — your calendar</h3>' +
+      '<div class="section-help">Rolling 30-day view. Click any chip to open that customer\'s panel.</div>' +
+      '<div class="month-cal">' + headHtml + rowsHtml + '</div>';
 
     // Grouped lists
     let groupsHtml = '';
@@ -4314,9 +4289,8 @@
     }
 
     const titleText = who === 'halee' ? "Halee's focus" : "Jaylee's focus";
-    const subtitleText = who === 'halee'
-      ? (esc(fmtHumanDate(today)) + ' — everything that needs your attention over the next 30 days.')
-      : (esc(fmtHumanDate(today)) + ' — everything that needs your attention this week.');
+    const subtitleText = esc(fmtHumanDate(today)) +
+      ' — everything that needs your attention over the next 30 days.';
     container.innerHTML =
       '<div class="focus-header">' +
         '<div>' +
