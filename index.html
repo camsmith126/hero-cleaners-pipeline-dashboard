@@ -4617,6 +4617,10 @@
     const retroBadge = (a && a.event_data && a.event_data.retroactive)
       ? '<span class="retroactive-badge">back-filled</span>' : '';
     const met = (p.met_customer != null) ? (p.met_customer ? 'true' : 'false') : '';
+    // intro_method lives in the customer_actions event_data (not on
+    // customer_profiles — no schema change needed). Reads from the latest
+    // first_check_in action's event_data.intro_method.
+    const introMethod = (a && a.event_data && a.event_data.intro_method) || '';
     const priorities = Array.isArray(p.top_priorities) ? p.top_priorities : [];
     const requests = p.specific_requests || '';
     const cardOnFile = (p.card_on_file != null) ? (p.card_on_file ? 'true' : 'false') : '';
@@ -4630,6 +4634,9 @@
         (editBtn || retroBadge ? '<div class="stage-field-row"><span class="field-label"></span><span class="field-value" style="text-align:right">' + retroBadge + editBtn + '</span></div>' : '') +
         '<div class="stage-field-row"><span class="field-label">Met the customer?</span><span class="field-value">' +
           segmented('__s8_met', [['true','Yes'],['false','No']], met) +
+        '</span></div>' +
+        '<div class="stage-field-row"><span class="field-label">Intro method</span><span class="field-value">' +
+          segmented('__s8_intro', [['in_person','In person'],['phone','Phone']], introMethod) +
         '</span></div>' +
         '<div class="stage-field-row"><span class="field-label">Top priorities</span><span class="field-value">' +
           chips('__s8_priorities', PRIORITY_OPTIONS, priorities) +
@@ -4654,6 +4661,7 @@
         '</span></div>' +
         // Hidden bridges for segmented + chips
         '<input type="hidden" data-stage-field="8" data-field="met_customer" value="' + esc(met) + '"/>' +
+        '<input type="hidden" data-stage-field="8" data-field="intro_method" value="' + esc(introMethod) + '"/>' +
         '<input type="hidden" data-stage-field="8" data-field="card_on_file" value="' + esc(cardOnFile) + '"/>' +
         '<input type="hidden" data-stage-field="8" data-field="home_during_cleans" value="' + esc(home) + '"/>' +
         '<input type="hidden" data-stage-field="8" data-field="contact_preference" value="' + esc(contact) + '"/>' +
@@ -4719,8 +4727,18 @@
     CURRENT.formStage = 'first';
     // Seed values from existing profile so an edit-in-progress isn't lost.
     const p = c.customer_profile || {};
+    // intro_method lives on customer_actions.event_data (not on customer_profiles).
+    // Seed from the latest first_check_in action so an edit shows what she picked.
+    const prevAction = (function() {
+      const acts = (c.pipeline_actions || []).filter(function(a){
+        return a.stage_name === 'first_check_in';
+      });
+      acts.sort(function(a,b){ return (b.logged_at || '').localeCompare(a.logged_at || ''); });
+      return acts[0] || null;
+    })();
     CURRENT.values = {
       met_customer:       (p.met_customer != null ? !!p.met_customer : null),
+      intro_method:       (prevAction && prevAction.event_data && prevAction.event_data.intro_method) || '',
       top_priorities:     Array.isArray(p.top_priorities) ? p.top_priorities.slice() : [],
       specific_requests:  p.specific_requests || '',
       card_on_file:       (p.card_on_file != null ? !!p.card_on_file : null),
@@ -4735,6 +4753,12 @@
       '<div class="form-group">' +
         '<label class="form-label">Met the customer?</label>' +
         segmented('met_customer', [['true','Yes'],['false','No']], boolToStr(CURRENT.values.met_customer)) +
+      '</div>' +
+
+      '<div class="form-group">' +
+        '<label class="form-label">Intro method</label>' +
+        segmented('intro_method', [['in_person','In person'],['phone','Phone']], CURRENT.values.intro_method) +
+        '<div class="form-help">How did you first introduce yourself to this customer?</div>' +
       '</div>' +
 
       '<div class="section-label">Preferences</div>' +
@@ -5104,6 +5128,7 @@
       '__s5_outcome':    {stage: 5, field: 'outcome',              type: 'str'},
       '__s6_result':     {stage: 6, field: 'result',               type: 'str'},
       '__s8_met':        {stage: 8, field: 'met_customer',         type: 'bool'},
+      '__s8_intro':      {stage: 8, field: 'intro_method',          type: 'str'},
       '__s8_card':       {stage: 8, field: 'card_on_file',         type: 'bool'},
       '__s8_home':       {stage: 8, field: 'home_during_cleans',   type: 'str'},
       '__s8_contact':    {stage: 8, field: 'contact_preference',   type: 'str'},
@@ -5496,6 +5521,10 @@
         // Append a first_check_in action so classifier advances stage 8→9
         const eventData = {
           met_customer:       profilePayload.met_customer,
+          // intro_method captures HOW Halee introduced herself to the customer
+          // during the first recurring visit. Lives only on the action event_data
+          // (not on customer_profiles) — no Supabase schema change required.
+          intro_method:       read('intro_method') || null,
           top_priorities:     profilePayload.top_priorities,
           specific_requests:  profilePayload.specific_requests,
           card_on_file:       profilePayload.card_on_file,
@@ -5578,6 +5607,10 @@
       if (CURRENT.formStage === 'first') {
         const eventData = {
           met_customer:       v.met_customer,
+          // intro_method: how Halee introduced herself. Stored on the action
+          // event_data only (no customer_profiles column) — same as the
+          // stage-8 detail-panel save path.
+          intro_method:       v.intro_method || null,
           top_priorities:     v.top_priorities,
           specific_requests:  v.specific_requests || null,
           card_on_file:       v.card_on_file,
