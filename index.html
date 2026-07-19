@@ -3,6 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
+<meta name="hc-build-id" content="20260719T153742">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Hero Cleaners — Customer Pipeline</title>
 <style>
   :root {
@@ -4351,6 +4356,76 @@
   // The DOM elements exist above, but openPanel etc. need to be defined
   // (they are — this whole IIFE runs synchronously).
   renderTab();
+
+  // ---- 2026-07-18: freshness watchdog -----------------------------------
+  // Cam's ask: no more hard-refresh dances. Every 60s (and on tab focus),
+  // re-fetch this page with cache-bust, extract the build_id meta tag,
+  // and if it differs from the one that was on the page at load time,
+  // show a banner offering a one-click reload.
+  //
+  // Robust to: browser HTTP cache (no-store fetch), GitHub Pages CDN
+  // (query string busts CDN too), and pause-when-tab-hidden throttling
+  // (checks fire again on visibility change).
+  (function setupFreshnessWatchdog(){
+    const buildIdMeta = document.querySelector('meta[name="hc-build-id"]');
+    if (!buildIdMeta) return;
+    const CURRENT_BUILD = buildIdMeta.getAttribute('content');
+    const CHECK_INTERVAL_MS = 60 * 1000;   // 60 seconds
+    let bannerShown = false;
+
+    function showReloadBanner(newBuild) {
+      if (bannerShown) return;
+      bannerShown = true;
+      const banner = document.createElement('div');
+      banner.setAttribute('role', 'alert');
+      banner.style.cssText = [
+        'position:fixed', 'top:12px', 'left:50%', 'transform:translateX(-50%)',
+        'z-index:9999', 'background:#171E26', 'color:#fff',
+        'padding:10px 18px', 'border-radius:999px',
+        'font-family:Söhne,-apple-system,BlinkMacSystemFont,sans-serif',
+        'font-size:13px', 'font-weight:600',
+        'box-shadow:0 6px 24px rgba(0,0,0,0.25)',
+        'cursor:pointer', 'display:flex', 'align-items:center', 'gap:10px'
+      ].join(';');
+      banner.innerHTML =
+        '<span style="width:8px;height:8px;background:#D92429;border-radius:50%;box-shadow:0 0 0 0 rgba(217,36,41,0.7);animation:hcPulse 1.6s infinite"></span>' +
+        '<span>Fresh data available</span>' +
+        '<span style="background:#D92429;padding:4px 10px;border-radius:999px;font-size:12px">Reload</span>';
+      // Inline the pulse keyframes so we don't need to touch the stylesheet.
+      const kf = document.createElement('style');
+      kf.textContent = '@keyframes hcPulse{0%{box-shadow:0 0 0 0 rgba(217,36,41,0.7)}70%{box-shadow:0 0 0 8px rgba(217,36,41,0)}100%{box-shadow:0 0 0 0 rgba(217,36,41,0)}}';
+      document.head.appendChild(kf);
+      banner.addEventListener('click', function(){
+        // Force a network hit so the fresh HTML is what loads.
+        location.replace(location.pathname + '?ts=' + Date.now());
+      });
+      document.body.appendChild(banner);
+    }
+
+    async function checkForFreshBuild() {
+      if (bannerShown) return;   // already prompting; no need to re-check
+      try {
+        const bust = 'ts=' + Date.now();
+        const url  = location.pathname + (location.search
+          ? location.search + '&' + bust
+          : '?' + bust);
+        const resp = await fetch(url, {cache: 'no-store', headers: {'Cache-Control': 'no-cache'}});
+        if (!resp.ok) return;
+        const text = await resp.text();
+        const m = text.match(/name="hc-build-id"\s+content="([^"]+)"/);
+        if (m && m[1] && m[1] !== CURRENT_BUILD) showReloadBanner(m[1]);
+      } catch(_) { /* offline / transient — try again next tick */ }
+    }
+
+    setInterval(checkForFreshBuild, CHECK_INTERVAL_MS);
+    // Also check when the tab regains focus (throttled setInterval doesn't fire
+    // in background tabs, so this catches long-idle sessions immediately).
+    document.addEventListener('visibilitychange', function(){
+      if (!document.hidden) checkForFreshBuild();
+    });
+    // And once, ~2s after load, in case someone opened a stale-cached copy.
+    setTimeout(checkForFreshBuild, 2000);
+  })();
 
   // ---- Panel state + open/close ----
   const scrim   = document.getElementById('panelScrim');
