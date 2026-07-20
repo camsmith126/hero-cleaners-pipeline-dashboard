@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260719T203400">
+<meta name="hc-build-id" content="20260719T205830">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -4122,7 +4122,7 @@
             '<td><a href="#" onclick="event.preventDefault()"><strong>' + name + '</strong></a></td>' +
             '<td>' + stageLabel(r.cs) + '</td>' +
             '<td>' + ownerLabel(r.owner) + '</td>' +
-            '<td>' + esc(fmtDateShort(r.due)) + '</td>' +
+            '<td>' + esc(fmtDateShort(isoOf(r.due))) + '</td>' +
             '<td class="right">' + daysLabel(r.daysOut) + '</td>' +
           '</tr>';
         }).join('') + '</tbody>' +
