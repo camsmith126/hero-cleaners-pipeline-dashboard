@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260719T184550">
+<meta name="hc-build-id" content="20260719T190953">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -2521,6 +2521,17 @@
   // tab. Halee: uses next_scheduled (first recurring for stage 8, next
   // recurring after 30d for stage 9). Jaylee: onboarding = first_visit
   // date; pitch = first_visit + 48h; falls back to today+7 as a bucket.
+  // Push a task off Sunday onto the next Monday. Cam 2026-07-19: no
+  // tasks scheduled for Sundays. Applies to every stage's due date via
+  // actionDueDate below.
+  function rollSundayForward(d) {
+    if (!d) return d;
+    if (d.getDay() !== 0) return d;
+    const next = new Date(d);
+    next.setDate(next.getDate() + 1);
+    return next;
+  }
+
   function actionDueDate(c) {
     const ps = c.pipeline_stage || {};
     const cs = ps.current_stage;
@@ -2546,10 +2557,30 @@
     } else if (cs === 2) {
       base = parseIsoDate(c.next_scheduled) || parseIsoDate(c.first_visit);
     } else if (cs === 5) {
-      const fv = parseIsoDate(c.first_visit);
-      if (fv) { base = new Date(fv); base.setDate(base.getDate() + 2); }
+      // Cam 2026-07-19: first pitch attempt is the day AFTER the first
+      // clean. If Jaylee logged a "no answer" attempt, the next attempt
+      // is the day after THAT. Ladders forward, one call per day.
+      const attemptStages = new Set([
+        'recurring_pitch_attempt_1',
+        'recurring_pitch_attempt_2',
+        'recurring_pitch_attempt_3',
+      ]);
+      const attempts = (c.pipeline_actions || [])
+        .filter(function(a) { return attemptStages.has(a.stage_name); })
+        .sort(function(a, b) {
+          return (b.logged_at || '').localeCompare(a.logged_at || '');
+        });
+      if (attempts.length) {
+        // Day after the most recent attempt.
+        const d = parseIsoDate((attempts[0].logged_at || '').slice(0, 10));
+        if (d) { base = new Date(d); base.setDate(base.getDate() + 1); }
+      } else {
+        // No attempts yet — first pitch = day after first clean.
+        const fv = parseIsoDate(c.first_visit);
+        if (fv) { base = new Date(fv); base.setDate(base.getDate() + 1); }
+      }
     }
-    return base;
+    return rollSundayForward(base);
   }
 
   // Map a job_type name to a chip variant. Two buckets only (Cam 2026-07-19):
