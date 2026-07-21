@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260720T192551">
+<meta name="hc-build-id" content="20260720T194047">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -3963,14 +3963,22 @@
     passes: function(c) {
       if (this.mode === 'all') return true;
       if (!c) return false;
-      const fv = c.first_visit ? String(c.first_visit).slice(0, 10) : '';
-      if (fv) return fv >= COHORT_CUTOFF_ISO;   // known first visit: cutoff test
+      const fv  = c.first_visit     ? String(c.first_visit).slice(0, 10)     : '';
+      const frv = c.first_rec_visit ? String(c.first_rec_visit).slice(0, 10) : '';
+      // Post-cutoff first visit → in cohort.
+      if (fv && fv >= COHORT_CUTOFF_ISO) return true;
+      // 2026-07-19 (Cam): also include customers whose FIRST RECURRING
+      // visit lands post-cutoff, even if their first clean was earlier.
+      // These are new converts whose intro moment (Halee visits at first
+      // recurring) is still upcoming — she needs visibility on them.
+      // Excludes customers whose first_rec_visit already passed pre-cutoff
+      // (that visit already happened; it's history, not new-convert work).
+      if (frv && frv >= COHORT_CUTOFF_ISO) return true;
       // No first_visit yet — brand-new customer whose first clean hasn't
       // happened. If they have an upcoming visit on the calendar, they're
-      // new-cohort by definition (they entered our funnel post-cutoff, we
-      // just don't have a completed first_visit to check). Only hide the
-      // truly-orphaned records (no history, no future). 2026-07-19 fix.
-      return !!c.next_scheduled;
+      // new-cohort by definition.
+      if (!fv) return !!c.next_scheduled;
+      return false;
     }
   };
   COHORT.load();
