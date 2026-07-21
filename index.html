@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260720T200518">
+<meta name="hc-build-id" content="20260720T205244">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -276,6 +276,27 @@
   .roster-box.pending {
     /* default styling — gray outlined */
   }
+
+  /* 2026-07-20: New Convert row — 10-stage pipeline visualization */
+  .new-convert-stage-cell {
+    display: flex; flex-direction: column; gap: 4px;
+    min-width: 200px;
+  }
+  .new-convert-stage-label {
+    font-size: 11px; color: var(--hero-black); font-weight: 600;
+  }
+  .new-convert-stage-dots {
+    display: inline-flex; gap: 3px;
+  }
+  .stage-dot {
+    width: 12px; height: 12px; border-radius: 50%;
+    background: #E4E7EB; border: 1px solid var(--border);
+    display: inline-block;
+  }
+  .stage-dot.done    { background: #2C7A4B; border-color: #2C7A4B; }
+  .stage-dot.current { background: var(--hero-red); border-color: var(--hero-red); }
+  .stage-dot.upcoming { background: #E4E7EB; }
+  .stage-dot.lost    { background: #171E26; border-color: #171E26; }
 
   /* Roster check-in panel (2026-07-19) */
   .roster-panel-intro {
@@ -5030,24 +5051,21 @@
     });
   }
 
-  // 2026-07-19 (Cam): a customer is a "new convert" if they RECENTLY went
-  // recurring AND Halee hasn't done the first check-in yet. Once check-in 1
-  // is Reached, they graduate into the established roster.
-  //   - is_recurring AND NOT grandfathered
-  //   - became_recurring_at within the last NEW_CONVERT_WINDOW_DAYS
-  //   - check-in 1 not yet reached
-  // Long-tenured customers whose check-in 1 hasn't happened yet (never went
-  // through the new process) stay in the Established section — they're not
-  // "new converts."
-  const NEW_CONVERT_WINDOW_DAYS = 60;
+  // 2026-07-20 (Cam): a customer is a "new convert" if their FIRST RECURRING
+  // VISIT is still in the future. They flow through the 10-step pipeline
+  // (Jaylee owns 1-6, Halee owns 7-10) and graduate to Established once
+  // they complete stage 9 (second check-in) — at which point their
+  // first_rec_visit will be in the past too.
+  //
+  // Customers whose first recurring already happened (Nate 7/6, Marianne 7/20)
+  // land in Established directly — they missed the new-process cutoff and
+  // Halee treats them as ongoing check-in customers instead.
   function isNewConvert(c) {
     if (!c.is_recurring) return false;
     if (c.established) return false;
-    if (checkinStatus(c, 1) === 'reached') return false;
-    const bra = parseIsoDate(c.became_recurring_at);
-    if (!bra) return false;   // no conversion date on record → treat as established
-    const cutoff = new Date(todayDate()); cutoff.setDate(cutoff.getDate() - NEW_CONVERT_WINDOW_DAYS);
-    return bra >= cutoff;
+    const frv = parseIsoDate(c.first_rec_visit);
+    if (!frv) return false;
+    return frv > todayDate();
   }
 
   function tenureDaysOf(c) {
@@ -5072,6 +5090,12 @@
   //   'reached'   — at least one attempt logged with answered=true
   //   'unreached' — 3 no-answer attempts and no reached
   //   'pending'   — still working (0-2 attempts, no reached yet)
+  //
+  // 2026-07-20 auto-mark: for step 1, ALSO treat the graduated-from-pipeline
+  // first_check_in action (the one Halee logs as stage 8 of the 10-step
+  // process) as an implicit 'reached'. So when a new convert completes
+  // stage 9 and moves to Established, box 1 shows green out of the gate
+  // and Halee starts fresh at box 2.
   function checkinStatus(c, step) {
     const target = 'roster_check_in_' + step;
     let hasReached = false, cnt = 0;
@@ -5079,6 +5103,12 @@
       if (a.stage_name !== target) continue;
       cnt += 1;
       if (a.event_data && a.event_data.answered === true) hasReached = true;
+    }
+    if (step === 1 && !hasReached) {
+      // Auto-mark from 10-step-pipeline first_check_in action.
+      for (const a of (c.pipeline_actions || [])) {
+        if (a.stage_name === 'first_check_in') { hasReached = true; break; }
+      }
     }
     if (hasReached) return 'reached';
     if (cnt >= 3)   return 'unreached';
@@ -5157,7 +5187,9 @@
     const newConverts = filtered.filter(isNewConvert);
     const established = filtered.filter(function(c){ return !isNewConvert(c); });
 
-    const rowHtml = function(c){
+    // Established row — 4 check-in boxes + click opens the roster
+    // check-in panel (openRosterPanel).
+    const establishedRowHtml = function(c){
       const rate = c.rate ? '$' + Number(c.rate).toFixed(0) : '—';
       const frv = c.first_rec_visit ? fmtDateShort(c.first_rec_visit) : '—';
       const tenure = tenureLabel(tenureDaysOf(c));
@@ -5168,7 +5200,7 @@
            status === 'unreached' ? 'no answer after 3 attempts' : 'pending');
         return '<span class="roster-box ' + status + '" data-roster-checkin="' + n + '" data-cid="' + esc(c.customer_id) + '" title="' + esc(title) + '">' + n + '</span>';
       }).join('');
-      return '<tr class="roster-row" data-open-cid="' + esc(c.customer_id) + '">' +
+      return '<tr class="roster-row" data-open-cid="' + esc(c.customer_id) + '" data-roster-kind="established">' +
         '<td><a href="#" onclick="event.preventDefault()"><strong>' + esc(c.display_name || '') + '</strong></a></td>' +
         '<td>' + esc(c.frequency || '—') + '</td>' +
         '<td class="right">' + esc(rate) + '</td>' +
@@ -5178,13 +5210,69 @@
       '</tr>';
     };
 
-    const tableHtml = function(rowsIn, emptyMsg) {
+    // New Convert row — 10-stage pipeline dots + click opens the
+    // 10-stage detail panel (openPanel). Halee/Jaylee move them through
+    // stages 1-10; graduation to Established happens automatically once
+    // they hit stage 10 (second check-in done).
+    const newConvertRowHtml = function(c){
+      const rate = c.rate ? '$' + Number(c.rate).toFixed(0) : '—';
+      const frv = c.first_rec_visit ? fmtDateShort(c.first_rec_visit) : '—';
+      const tenure = tenureLabel(tenureDaysOf(c));
+      const ps = c.pipeline_stage || {};
+      const stages = ps.stages || {};
+      const isLost = !!ps.lost || ps.current_stage === 'Lost';
+      const currentN = typeof ps.current_stage === 'number' ? ps.current_stage : null;
+      const currentLabel = currentN
+        ? 'Stage ' + currentN + ' · ' + (
+            currentN === 1 ? 'Booked' :
+            currentN === 2 ? 'Onboarding call' :
+            currentN === 3 ? 'First clean done' :
+            currentN === 4 ? 'Seed planted' :
+            currentN === 5 ? 'Recurring pitch' :
+            currentN === 6 ? 'Won recurring' :
+            currentN === 7 ? 'First recurring visit' :
+            currentN === 8 ? 'First check-in' :
+            currentN === 9 ? 'Second check-in' :
+            'Retained')
+        : (isLost ? 'Lost' : '—');
+      // 10 compact stage dots.
+      const dots = [1,2,3,4,5,6,7,8,9,10].map(function(n){
+        const state = stages[n] || 'upcoming';
+        return '<span class="stage-dot ' + esc(state) + (isLost && n >= currentN ? ' lost' : '') + '" title="Stage ' + n + '"></span>';
+      }).join('');
+      return '<tr class="roster-row" data-open-cid="' + esc(c.customer_id) + '" data-roster-kind="new-convert">' +
+        '<td><a href="#" onclick="event.preventDefault()"><strong>' + esc(c.display_name || '') + '</strong></a></td>' +
+        '<td>' + esc(c.frequency || '—') + '</td>' +
+        '<td class="right">' + esc(rate) + '</td>' +
+        '<td>' + esc(frv) + '</td>' +
+        '<td>' + esc(tenure) + '</td>' +
+        '<td>' +
+          '<div class="new-convert-stage-cell">' +
+            '<div class="new-convert-stage-label">' + esc(currentLabel) + '</div>' +
+            '<div class="new-convert-stage-dots">' + dots + '</div>' +
+          '</div>' +
+        '</td>' +
+      '</tr>';
+    };
+
+    const tableHtml = function(rowsIn, emptyMsg, rowFn, lastColHead) {
+      // Same 6-column head but the last column label differs per section
+      // ("Pipeline stage" for new converts vs "Check-ins" for established).
+      const localHeaders = headers.map(function(h){
+        if (h[0] !== 'checkins') return h;
+        return ['checkins', lastColHead || h[1]];
+      });
+      const localHeadHtml = '<tr>' + localHeaders.map(function(h){
+        const arrow = sort.col === h[0] ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : '';
+        const cls = 'roster-th' + (sort.col === h[0] ? ' active' : '');
+        return '<th class="' + cls + '" data-sort-col="' + h[0] + '">' + esc(h[1]) + arrow + '</th>';
+      }).join('') + '</tr>';
       const body = rowsIn.length
-        ? rowsIn.map(rowHtml).join('')
+        ? rowsIn.map(rowFn).join('')
         : '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted)">' + esc(emptyMsg) + '</td></tr>';
       return '<div class="roster-table-wrap">' +
         '<table class="roster-table">' +
-          '<thead>' + headHtml + '</thead>' +
+          '<thead>' + localHeadHtml + '</thead>' +
           '<tbody>' + body + '</tbody>' +
         '</table>' +
       '</div>';
@@ -5203,19 +5291,27 @@
 
       '<h3 class="roster-section-head">New Converts <span class="tab-count">' + newConverts.length + '</span></h3>' +
       '<div class="roster-section-help">' +
-        'Recently converted to recurring. Their first recurring visit is on the calendar — Halee introduces herself in person and logs Check-in 1. Once Check-in 1 shows Reached (green), they graduate to the Established list below.' +
+        'First recurring clean still upcoming. They flow through the 10-step pipeline (Jaylee: stages 1-6, Halee: stages 7-10). Once they hit Retained (stage 10), they graduate to Established below. Click a row to open the 10-stage detail panel.' +
       '</div>' +
-      tableHtml(newConverts,
+      tableHtml(
+        newConverts,
         (filter
           ? 'No new converts match your filter.'
-          : 'No new converts right now. When Jaylee marks someone as Won and their first recurring visit is scheduled, they land here.')) +
+          : 'No new converts right now. When Jaylee marks someone as Won and their first recurring visit is in the future, they land here.'),
+        newConvertRowHtml,
+        'Pipeline stage'
+      ) +
 
       '<h3 class="roster-section-head">Established <span class="tab-count">' + established.length + '</span></h3>' +
       '<div class="roster-section-help">' +
-        'All recurring customers past their first check-in. Halee continues Check-ins 2-4 over time.' +
+        'Recurring customers Halee tracks through 4 ongoing check-ins. Sort by First recurring to prioritize newer ones.' +
       '</div>' +
-      tableHtml(established,
-        (filter ? 'No established customers match your filter.' : 'Nobody on the established roster yet.'));
+      tableHtml(
+        established,
+        (filter ? 'No established customers match your filter.' : 'Nobody on the established roster yet.'),
+        establishedRowHtml,
+        'Check-ins'
+      );
 
     // Sort header clicks.
     container.querySelectorAll('.roster-th').forEach(function(th){
@@ -5248,8 +5344,11 @@
       });
     }
 
-    // Row click opens the dedicated 4-check-in side panel.
-    // A specific check-in-box click opens with focus on that step.
+    // Row click routes based on which section the customer is in:
+    //   established → 4-check-in side panel (openRosterPanel)
+    //   new-convert → 10-stage detail panel (openPanel)
+    // Box clicks (only on established rows) still open the check-in panel
+    // focused on that step.
     container.querySelectorAll('.roster-box').forEach(function(box){
       box.addEventListener('click', function(ev){
         ev.stopPropagation();
@@ -5260,9 +5359,11 @@
     });
     container.querySelectorAll('.roster-row').forEach(function(row){
       row.addEventListener('click', function(ev){
-        // If the click was on a box (or its child), let the box handler run
         if (ev.target.closest('.roster-box')) return;
-        openRosterPanel(row.getAttribute('data-open-cid'));
+        const cid = row.getAttribute('data-open-cid');
+        const kind = row.getAttribute('data-roster-kind');
+        if (kind === 'new-convert') openPanel(cid);
+        else openRosterPanel(cid);
       });
     });
   }
