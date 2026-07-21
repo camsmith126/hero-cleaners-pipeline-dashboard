@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260720T220902">
+<meta name="hc-build-id" content="20260720T221107">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -6572,10 +6572,10 @@
           segmented('__s8_vibe', [['straightforward','Straightforward'],['friendly','Friendly'],['reserved','Reserved']], vibe) +
         '</span></div>' +
         '<div class="stage-hint" style="margin-top:-4px">How they engaged — helps shape how we serve them.</div>' +
-        '<div class="stage-field-row"><span class="field-label">' + esc(cleanerFitLabel) + '</span><span class="field-value">' +
+        '<div class="stage-field-row"><span class="field-label">Cleaner</span><span class="field-value">' +
           segmented('__s8_cleaner', [['great','Great fit'],['fine','Fine'],['concerns','Concerns']], cleanerFit) +
         '</span></div>' +
-        '<div class="stage-hint" style="margin-top:-4px">Great fit = wants them specifically. Concerns = mentioned issues; capture details in Notes below.</div>' +
+        '<div class="stage-hint" style="margin-top:-4px">' + (cleanerName ? 'About ' + esc(cleanerName) + ' — g' : 'G') + 'reat fit = wants them specifically. Concerns = mentioned issues; capture details in Notes below.</div>' +
         '<div class="stage-field-row"><span class="field-label">Frequency check</span><span class="field-value">' +
           segmented('__s8_freq', [['more','Wants more frequent'],['right','Current cadence works'],['less','Would like less frequent']], freq) +
         '</span></div>' +
