@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260720T213429">
+<meta name="hc-build-id" content="20260720T215712">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -5989,7 +5989,21 @@
     const d = action.event_data || {};
     const bits = [];
     if (kind === 'first') {
-      if (d.met_customer != null) bits.push('Met customer: <strong>' + (d.met_customer ? 'Yes' : 'No') + '</strong>');
+      // New shape (2026-07-20): met_in_person + vibe/frequency_check/time_check.
+      // Old rows (kept for backward-compat) had met_customer + top_priorities et al.
+      const met = (d.met_in_person != null) ? d.met_in_person : d.met_customer;
+      if (met != null) bits.push('Met in person: <strong>' + (met ? 'Yes' : 'No') + '</strong>');
+      if (d.reached_via) {
+        const via = d.reached_via === 'in_person'   ? 'in person'
+                  : d.reached_via === 'unreached'   ? 'never reached (3 attempts)'
+                  : d.reached_via === 'earlier_attempt' ? 'earlier attempt'
+                  : (d.reached_via.indexOf('attempt_') === 0 ? 'attempt ' + d.reached_via.slice(-1) : d.reached_via);
+        bits.push('Reached: ' + esc(via));
+      }
+      if (d.vibe) bits.push('Vibe: <strong>' + esc(d.vibe) + '</strong>');
+      if (d.frequency_check) bits.push('Frequency: ' + esc({'more':'wants more frequent','right':'current cadence works','less':'would like less'}[d.frequency_check] || d.frequency_check));
+      if (d.time_check)      bits.push('Time per clean: ' + esc({'more':'wants more time','right':'current is right','less':'could use less'}[d.time_check] || d.time_check));
+      // Legacy fields (from pre-rewrite rows) — still surface so old logs read fine.
       if (Array.isArray(d.top_priorities) && d.top_priorities.length)
         bits.push('Priorities: ' + d.top_priorities.map(esc).join(', '));
       if (d.specific_requests) bits.push('Requests: ' + esc(d.specific_requests));
@@ -6447,67 +6461,149 @@
     };
   }
 
-  // ---- Stage 8: first_check_in — retention profile (writes to customer_profiles)
+  // ---- Stage 8: first_check_in (rewritten 2026-07-20)
+  //
+  // New shape (Cam):
+  //   Q1  Met in person?  (Yes/No)
+  //   Q2  If No — 3 sequential phone attempts (Reached them / No answer)
+  //   Q3  Vibe             (Warm / Friendly / Reserved / Cool)
+  //   Q4  Frequency check  (Wants more / Current works / Would like less)
+  //   Q5  Time per clean   (Wants more / Current works / Could use less)
+  //   Q6  Notes
+  //
+  // Data model:
+  //   Each attempt → customer_actions row `first_check_in_attempt_N` with
+  //     event_data = {answered: bool, notes}. These do NOT advance the
+  //     classifier (which watches for `first_check_in`).
+  //   Close-out → customer_actions row `first_check_in` with the full
+  //     event_data (met_in_person, vibe, frequency_check, time_check,
+  //     reached_via, notes). Advances stage 8 → 9.
+  //
+  // Save gating (see saveStage(8)):
+  //   - Attempt-only: met!=Yes and user picked Reached/No answer on the
+  //     active row → writes attempt row; card stays at Stage 8.
+  //   - Close-out: met=Yes, or an attempt reached them, or 3 no-answers
+  //     logged → writes `first_check_in` row (with vibe/freq/time filled
+  //     if reached, else close-as-unreached).
   function stage8Body(c, state) {
-    const p = c.customer_profile || {};
-    const a = latestActionFor(c, 'first_check_in');
-    const populated = !!a || Object.keys(p).some(function(k){ return p[k] != null && k !== 'updated_at' && k !== 'lead_source'; });
+    const closeOut = latestActionFor(c, 'first_check_in');
+    const attempts = (c.pipeline_actions || []).filter(function(a){
+      return (a.stage_name || '').indexOf('first_check_in_attempt_') === 0;
+    }).map(function(a){
+      const n = parseInt(a.stage_name.slice(-1), 10);
+      const d = a.event_data || {};
+      return {n: n, answered: !!d.answered, notes: d.notes || '', logged_at: a.logged_at};
+    }).sort(function(a,b){ return a.n - b.n; });
+
+    const populated = !!closeOut;
     const editBtn = populated
       ? '<button type="button" class="stage-edit" data-stage-edit="8">✎ Edit</button>'
       : '';
-    const retroBadge = (a && a.event_data && a.event_data.retroactive)
+    const d = (closeOut && closeOut.event_data) || {};
+    const retroBadge = (populated && d.retroactive)
       ? '<span class="retroactive-badge">back-filled</span>' : '';
-    const met = (p.met_customer != null) ? (p.met_customer ? 'true' : 'false') : '';
-    // intro_method lives in the customer_actions event_data (not on
-    // customer_profiles — no schema change needed). Reads from the latest
-    // first_check_in action's event_data.intro_method.
-    const introMethod = (a && a.event_data && a.event_data.intro_method) || '';
-    const priorities = Array.isArray(p.top_priorities) ? p.top_priorities : [];
-    const requests = p.specific_requests || '';
-    const cardOnFile = (p.card_on_file != null) ? (p.card_on_file ? 'true' : 'false') : '';
-    const home = p.home_during_cleans || '';
-    const access = p.access_notes || '';
-    const contact = p.contact_preference || '';
-    const notes = p.notes || '';
-    return {
-      locked: populated,
-      html:
-        (editBtn || retroBadge ? '<div class="stage-field-row"><span class="field-label"></span><span class="field-value" style="text-align:right">' + retroBadge + editBtn + '</span></div>' : '') +
-        '<div class="stage-field-row"><span class="field-label">Met the customer?</span><span class="field-value">' +
-          segmented('__s8_met', [['true','Yes'],['false','No']], met) +
+
+    // Seed values from prior close-out so re-opens preserve them.
+    const met  = (d.met_in_person != null) ? (d.met_in_person ? 'true' : 'false') : '';
+    const vibe = d.vibe || '';
+    const freq = d.frequency_check || '';
+    const timeCheck = d.time_check || '';
+    const notes = d.notes || '';
+
+    const anyReached = attempts.some(function(a){ return a.answered; });
+    const nextAttempt = Math.min(attempts.length + 1, 3);
+    const attemptsClosed = (attempts.length >= 3);
+
+    // 3-row attempts tracker (identical pattern to Stage 5 pitch attempts).
+    const trackerRows = [1,2,3].map(function(n){
+      const prior = attempts.find(function(a){ return a.n === n; });
+      if (prior) {
+        const lbl = prior.answered ? 'Reached them' : 'No answer';
+        return '<div class="pitch-attempt done">' +
+          '<span class="pitch-attempt-n">Attempt ' + n + '</span>' +
+          '<span class="pitch-attempt-result">✓ ' + esc(lbl) + '</span>' +
+          '<span class="pitch-attempt-when">' + esc(fmtDateShort(prior.logged_at)) + '</span>' +
+        '</div>';
+      }
+      const isActive = (n === nextAttempt);
+      return '<div class="pitch-attempt' + (isActive ? ' active' : ' pending') + '">' +
+        '<span class="pitch-attempt-n">Attempt ' + n + '</span>' +
+        (isActive
+          ? '<span class="pitch-attempt-controls">' + segmented('__s8_att_answered', [['true','Reached them'],['false','No answer']], '') + '</span>'
+          : '<span class="pitch-attempt-result muted">Waiting on attempt ' + (n-1) + '</span>'
+        ) +
+      '</div>';
+    }).join('');
+
+    // Attempts block hidden when met=Yes (no need to phone if she met in person).
+    const attemptsBlock =
+      '<div id="s8_attempts_block_' + esc(c.customer_id) + '" data-s8-block="attempts" style="display:' + (met === 'true' ? 'none' : '') + '">' +
+        '<div class="stage-hint">Log up to 3 phone attempts to reach them. Each Reached/No answer saves independently — come back later for the next attempt.</div>' +
+        '<div class="pitch-tracker" style="margin-top:10px">' + trackerRows + '</div>' +
+        (attemptsClosed && !anyReached
+          ? '<div class="pitch-warn"><strong>3 no-answers logged.</strong> Save below to close this check-in as unreached, or fill Vibe/Frequency/Time if you eventually reached them by text/email.</div>'
+          : '') +
+      '</div>';
+
+    // Questions unlock once we know we\'ve got info to give: met in person,
+    // or an attempt reached them. Otherwise hidden — they\'d be premature.
+    const questionsUnlocked = (met === 'true' || anyReached);
+    const questionsBlock =
+      '<div id="s8_questions_block_' + esc(c.customer_id) + '" data-s8-block="questions" style="display:' + (questionsUnlocked ? '' : 'none') + '">' +
+        '<div class="stage-field-row"><span class="field-label">Vibe</span><span class="field-value">' +
+          segmented('__s8_vibe', [['warm','Warm'],['friendly','Friendly'],['reserved','Reserved'],['cool','Cool']], vibe) +
         '</span></div>' +
-        '<div class="stage-field-row"><span class="field-label">Intro method</span><span class="field-value">' +
-          segmented('__s8_intro', [['in_person','In person'],['phone','Phone']], introMethod) +
+        '<div class="stage-hint" style="margin-top:-4px">How they engaged — helps shape how we serve them.</div>' +
+        '<div class="stage-field-row"><span class="field-label">Frequency check</span><span class="field-value">' +
+          segmented('__s8_freq', [['more','Wants more frequent'],['right','Current cadence works'],['less','Would like less frequent']], freq) +
         '</span></div>' +
-        '<div class="stage-field-row"><span class="field-label">Top priorities</span><span class="field-value">' +
-          chips('__s8_priorities', PRIORITY_OPTIONS, priorities) +
-        '</span></div>' +
-        '<div class="stage-field-row"><span class="field-label">Specific requests</span><span class="field-value">' +
-          '<textarea class="form-textarea" data-stage-field="8" data-field="specific_requests" placeholder="Do-not-miss items">' + esc(requests) + '</textarea>' +
-        '</span></div>' +
-        '<div class="stage-field-row"><span class="field-label">Card on file?</span><span class="field-value">' +
-          segmented('__s8_card', [['true','Yes'],['false','No — need to collect']], cardOnFile) +
-        '</span></div>' +
-        '<div class="stage-field-row"><span class="field-label">Home during cleans?</span><span class="field-value">' +
-          segmented('__s8_home', [['always','Always home'],['sometimes','Sometimes'],['usually_away','Usually away']], home) +
-        '</span></div>' +
-        '<div class="stage-field-row"><span class="field-label">Access notes</span><span class="field-value">' +
-          '<input class="form-input" data-stage-field="8" data-field="access_notes" value="' + esc(access) + '"/>' +
-        '</span></div>' +
-        '<div class="stage-field-row"><span class="field-label">Preferred contact</span><span class="field-value">' +
-          segmented('__s8_contact', [['call','Call'],['text','Text'],['email','Email']], contact) +
+        '<div class="stage-field-row"><span class="field-label">Time per clean</span><span class="field-value">' +
+          segmented('__s8_time', [['more','Wants more time'],['right','Current time is right'],['less','Could use less time']], timeCheck) +
         '</span></div>' +
         '<div class="stage-field-row"><span class="field-label">Notes</span><span class="field-value">' +
           '<textarea class="form-textarea" data-stage-field="8" data-field="notes" placeholder="Anything worth remembering">' + esc(notes) + '</textarea>' +
         '</span></div>' +
-        // Hidden bridges for segmented + chips
-        '<input type="hidden" data-stage-field="8" data-field="met_customer" value="' + esc(met) + '"/>' +
-        '<input type="hidden" data-stage-field="8" data-field="intro_method" value="' + esc(introMethod) + '"/>' +
-        '<input type="hidden" data-stage-field="8" data-field="card_on_file" value="' + esc(cardOnFile) + '"/>' +
-        '<input type="hidden" data-stage-field="8" data-field="home_during_cleans" value="' + esc(home) + '"/>' +
-        '<input type="hidden" data-stage-field="8" data-field="contact_preference" value="' + esc(contact) + '"/>' +
-        '<input type="hidden" data-stage-field="8" data-field="top_priorities" value=\'' + esc(JSON.stringify(priorities)) + '\'/>'
+      '</div>';
+
+    return {
+      locked: populated,
+      html:
+        (editBtn || retroBadge ? '<div class="stage-field-row"><span class="field-label"></span><span class="field-value" style="text-align:right">' + retroBadge + editBtn + '</span></div>' : '') +
+        '<div class="stage-field-row"><span class="field-label">Met in person?</span><span class="field-value">' +
+          segmented('__s8_met_in_person', [['true','Yes'],['false','No']], met) +
+        '</span></div>' +
+        attemptsBlock +
+        questionsBlock +
+        // Hidden mirrors — saveStage(8) reads from these.
+        '<input type="hidden" data-stage-field="8" data-field="met_in_person" value="' + esc(met) + '"/>' +
+        '<input type="hidden" data-stage-field="8" data-field="vibe" value="' + esc(vibe) + '"/>' +
+        '<input type="hidden" data-stage-field="8" data-field="frequency_check" value="' + esc(freq) + '"/>' +
+        '<input type="hidden" data-stage-field="8" data-field="time_check" value="' + esc(timeCheck) + '"/>' +
+        '<input type="hidden" data-stage-field="8" data-field="att_answered" value=""/>' +
+        '<input type="hidden" data-stage-field="8" data-field="att_number" value="' + nextAttempt + '"/>'
     };
+  }
+
+  // Toggle Stage 8\'s attempts/questions blocks based on the Met-in-person
+  // pick + whether an attempt has just reached them.
+  function refreshStage8Blocks() {
+    const met = readStageField(8, 'met_in_person');
+    const attAnswered = readStageField(8, 'att_answered');
+    const anyPriorReached = (function(){
+      const c = CURRENT && CURRENT.customer;
+      if (!c) return false;
+      return (c.pipeline_actions || []).some(function(a){
+        return (a.stage_name || '').indexOf('first_check_in_attempt_') === 0
+            && a.event_data && a.event_data.answered === true;
+      });
+    })();
+    const anyReached = anyPriorReached || (attAnswered === 'true');
+    const bd = bodyEl.querySelector('[data-stage-body="8"]');
+    if (!bd) return;
+    const attemptsBlock  = bd.querySelector('[data-s8-block="attempts"]');
+    const questionsBlock = bd.querySelector('[data-s8-block="questions"]');
+    if (attemptsBlock)  attemptsBlock.style.display  = (met === 'true') ? 'none' : '';
+    if (questionsBlock) questionsBlock.style.display = (met === 'true' || anyReached) ? '' : 'none';
   }
 
   // ---- Stage 9: second_check_in — writes to customer_actions
@@ -6962,20 +7058,22 @@
     // names look like `__sN_thing` and we map to real field names by
     // convention below.
     const SEGMENTED_MAP = {
-      '__s2_contact':    {stage: 2, field: 'contact_method',       type: 'str'},
-      '__s4_read':       {stage: 4, field: 'read',                 type: 'str'},
-      '__s4_triad':      {stage: 4, field: 'triad_given',          type: 'bool'},
-      '__s5_answered':   {stage: 5, field: 'answered',             type: 'bool'},
-      '__s5_outcome':    {stage: 5, field: 'outcome',              type: 'str'},
-      '__s6_result':     {stage: 6, field: 'result',               type: 'str'},
-      '__s8_met':        {stage: 8, field: 'met_customer',         type: 'bool'},
-      '__s8_intro':      {stage: 8, field: 'intro_method',          type: 'str'},
-      '__s8_card':       {stage: 8, field: 'card_on_file',         type: 'bool'},
-      '__s8_home':       {stage: 8, field: 'home_during_cleans',   type: 'str'},
-      '__s8_contact':    {stage: 8, field: 'contact_preference',   type: 'str'},
-      '__s9_contact':    {stage: 9, field: 'contact_method',       type: 'str'},
-      '__s9_reached':    {stage: 9, field: 'reached',              type: 'bool'},
-      '__s9_going':      {stage: 9, field: 'going_well',           type: 'bool'}
+      '__s2_contact':      {stage: 2, field: 'contact_method',       type: 'str'},
+      '__s4_read':         {stage: 4, field: 'read',                 type: 'str'},
+      '__s4_triad':        {stage: 4, field: 'triad_given',          type: 'bool'},
+      '__s5_answered':     {stage: 5, field: 'answered',             type: 'bool'},
+      '__s5_outcome':      {stage: 5, field: 'outcome',              type: 'str'},
+      '__s6_result':       {stage: 6, field: 'result',               type: 'str'},
+      // Stage 8 (2026-07-20 rewrite): met_in_person + per-attempt answered +
+      // vibe/frequency_check/time_check. See stage8Body for the flow.
+      '__s8_met_in_person':{stage: 8, field: 'met_in_person',        type: 'bool'},
+      '__s8_att_answered': {stage: 8, field: 'att_answered',         type: 'bool'},
+      '__s8_vibe':         {stage: 8, field: 'vibe',                 type: 'str'},
+      '__s8_freq':         {stage: 8, field: 'frequency_check',      type: 'str'},
+      '__s8_time':         {stage: 8, field: 'time_check',           type: 'str'},
+      '__s9_contact':      {stage: 9, field: 'contact_method',       type: 'str'},
+      '__s9_reached':      {stage: 9, field: 'reached',              type: 'bool'},
+      '__s9_going':        {stage: 9, field: 'going_well',           type: 'bool'}
     };
 
     // Wire segmented buttons
@@ -6997,6 +7095,11 @@
             markCardDirty(mapping.stage);
             // Stage 6: toggle Won/Lost blocks when result changes
             if (mapping.stage === 6 && mapping.field === 'result') refreshStage6Blocks(val);
+            // Stage 8: toggle attempts/questions blocks on met_in_person or
+            // att_answered pick.
+            if (mapping.stage === 8 && (mapping.field === 'met_in_person' || mapping.field === 'att_answered')) {
+              refreshStage8Blocks();
+            }
           } else {
             // Fallback — find which stage-card contains us and dirty it
             const card = group.closest('.stage-card[data-stage]');
@@ -7338,53 +7441,108 @@
         const readable = {won:'WON',lost:'Lost',estimate_sent:'Estimate sent',pending_response:'Pending'}[result];
         toast('Saved. Recurring pitch: ' + readable + '.' + (eventData.retroactive ? ' (back-fill)' : '') + ' ' + REFRESH_HINT);
       } else if (n === 8) {
-        // Retention profile → customer_profiles upsert.
-        // Also append a customer_actions row so the timeline shows the
-        // check-in event.
-        const priorities = readList('top_priorities');
-        const profilePayload = {
-          customer_id:        c.customer_id,
-          met_customer:       readBool('met_customer'),
-          top_priorities:     priorities.length ? priorities : null,
-          specific_requests:  read('specific_requests') || null,
-          card_on_file:       readBool('card_on_file'),
-          home_during_cleans: read('home_during_cleans') || null,
-          access_notes:       read('access_notes') || null,
-          contact_preference: read('contact_preference') || null,
-          notes:              read('notes') || null,
-          updated_at:         new Date().toISOString()
-        };
-        await sb('customer_profiles?on_conflict=customer_id', {
-          method: 'POST',
-          headers: {'Prefer': 'resolution=merge-duplicates,return=representation'},
-          body: JSON.stringify(profilePayload)
+        // 2026-07-20 rewrite. Two save modes, decided from current state:
+        //   1) Attempt-only  — user just picked Reached/No answer on the
+        //      active attempt row and hasn\'t hit the close-out conditions.
+        //      Writes `first_check_in_attempt_N`; classifier does NOT advance.
+        //   2) Close-out     — met_in_person=Yes OR someone was reached on
+        //      an attempt OR 3 no-answers were logged. Writes `first_check_in`
+        //      (with vibe/frequency_check/time_check if reached, or a bare
+        //      close-out with reached_via='unreached'). Classifier advances 8→9.
+        // Both fire in one save if the user hits Reached-them on an attempt
+        // and fills the questions in the same submit.
+        const met         = readBool('met_in_person');   // true | false | null
+        const attAnswered = readBool('att_answered');    // true | false | null
+        const attNumber   = parseInt(read('att_number') || '1', 10);
+        const vibe        = read('vibe');
+        const freq        = read('frequency_check');
+        const timeCheck   = read('time_check');
+        const notes       = read('notes');
+
+        const priorAttempts = (c.pipeline_actions || []).filter(function(a){
+          return (a.stage_name || '').indexOf('first_check_in_attempt_') === 0;
         });
-        // Append a first_check_in action so classifier advances stage 8→9
-        const eventData = {
-          met_customer:       profilePayload.met_customer,
-          // intro_method captures HOW Halee introduced herself to the customer
-          // during the first recurring visit. Lives only on the action event_data
-          // (not on customer_profiles) — no Supabase schema change required.
-          intro_method:       read('intro_method') || null,
-          top_priorities:     profilePayload.top_priorities,
-          specific_requests:  profilePayload.specific_requests,
-          card_on_file:       profilePayload.card_on_file,
-          home_during_cleans: profilePayload.home_during_cleans,
-          access_notes:       profilePayload.access_notes,
-          contact_preference: profilePayload.contact_preference,
-          notes:              profilePayload.notes
-        };
-        if (shouldFlagRetroactive(c, 8, 'first_check_in')) eventData.retroactive = true;
-        await sb('customer_actions', {
-          method: 'POST',
-          body: JSON.stringify({
-            customer_id: c.customer_id,
-            stage_name:  'first_check_in',
-            event_data:  eventData,
-            logged_by:   loggedBy()
-          })
+        const anyPriorReached = priorAttempts.some(function(a){
+          return a.event_data && a.event_data.answered === true;
         });
-        toast('Saved. First check-in logged.' + (eventData.retroactive ? ' (back-fill)' : '') + ' ' + REFRESH_HINT);
+        const attemptsClosed = priorAttempts.length >= 3;
+        const anyReached = anyPriorReached || (attAnswered === true);
+        const hasQuestions = !!(vibe && freq && timeCheck);
+        const closingUnreached = attemptsClosed && !anyReached;
+
+        // Decide branches.
+        const freshAttempt = (attAnswered !== null && !attemptsClosed && met !== true);
+        const canCloseOut  = (met === true) || anyReached || closingUnreached;
+        const shouldCloseOut = canCloseOut && (hasQuestions || closingUnreached);
+
+        // Guard: nothing to save.
+        if (!freshAttempt && !shouldCloseOut) {
+          if (met === null) {
+            toast('Pick whether you met the customer in person first.', true);
+          } else if (met === true && !hasQuestions) {
+            toast('Pick Vibe, Frequency check, and Time per clean to close out.', true);
+          } else if (met === false && attAnswered === null && !anyPriorReached && !attemptsClosed) {
+            toast('Log an attempt (Reached / No answer) or switch Met in person to Yes.', true);
+          } else {
+            toast('Fill Vibe, Frequency check, and Time per clean to close the check-in.', true);
+          }
+          throw new Error('nothing to save on stage 8');
+        }
+
+        // Branch 1: attempt row.
+        if (freshAttempt) {
+          await sb('customer_actions', {
+            method: 'POST',
+            body: JSON.stringify({
+              customer_id: c.customer_id,
+              stage_name:  'first_check_in_attempt_' + attNumber,
+              event_data:  {
+                answered: attAnswered,
+                notes:    notes || null
+              },
+              logged_by:   loggedBy()
+            })
+          });
+        }
+
+        // Branch 2: close-out row.
+        if (shouldCloseOut) {
+          const reachedVia = (met === true) ? 'in_person'
+                           : (attAnswered === true) ? ('attempt_' + attNumber)
+                           : anyPriorReached ? 'earlier_attempt'
+                           : 'unreached';
+          const eventData = {
+            met_in_person:   met,
+            vibe:            hasQuestions ? vibe : null,
+            frequency_check: hasQuestions ? freq : null,
+            time_check:      hasQuestions ? timeCheck : null,
+            reached_via:     reachedVia,
+            notes:           notes || null
+          };
+          if (shouldFlagRetroactive(c, 8, 'first_check_in')) eventData.retroactive = true;
+          await sb('customer_actions', {
+            method: 'POST',
+            body: JSON.stringify({
+              customer_id: c.customer_id,
+              stage_name:  'first_check_in',
+              event_data:  eventData,
+              logged_by:   loggedBy()
+            })
+          });
+        }
+
+        // Toast wording.
+        let msg;
+        if (freshAttempt && shouldCloseOut) {
+          msg = 'Saved. Attempt ' + attNumber + ' logged + check-in closed.';
+        } else if (shouldCloseOut) {
+          msg = closingUnreached
+            ? 'Saved. First check-in closed as unreached.'
+            : 'Saved. First check-in closed out.';
+        } else {
+          msg = 'Saved. Attempt ' + attNumber + ' logged — card stays at Stage 8.';
+        }
+        toast(msg + ' ' + REFRESH_HINT);
       } else if (n === 9) {
         const eventData = {
           contact_method: read('contact_method') || null,
