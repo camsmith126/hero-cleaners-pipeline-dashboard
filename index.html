@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260720T212056">
+<meta name="hc-build-id" content="20260720T212311">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -5343,17 +5343,17 @@
         '</div>' +
       '</div>' +
 
-      '<h3 class="roster-section-head">New Converts <span class="tab-count">' + newConverts.length + '</span></h3>' +
+      '<h3 class="roster-section-head">New Recurring <span class="tab-count">' + newConverts.length + '</span></h3>' +
       '<div class="roster-section-help">' +
-        'Had (or scheduled) a first clean, not yet on the recurring roster. They flow through the 10-step pipeline (Jaylee: stages 1-6, Halee: stages 7-10). Click a card to open the 10-stage detail panel. Once they hit Retained (stage 10), they graduate to Established below with Check-in 1 auto-marked.' +
+        'Just sold on recurring — first recurring clean still upcoming. They flow through the 10-step pipeline (Jaylee: stages 1-6, Halee: stages 7-10). Click a card to open the 10-stage detail panel. Once they hit Retained (stage 10), they graduate to Established below with Check-in 1 auto-marked.' +
       '</div>' +
       '<div class="roster-cards-wrap">' +
         (newConverts.length
           ? newConverts.map(renderNewConvertCard).join('')
           : '<div class="group-empty" style="margin:8px 24px 16px">' +
               esc(filter
-                ? 'No new converts match your filter.'
-                : 'No new converts right now. When Jaylee marks someone as Won and their first recurring visit is in the future, they land here.') +
+                ? 'No new-recurring customers match your filter.'
+                : 'No new-recurring customers right now. When Jaylee marks someone as Won and their first recurring visit is in the future, they land here.') +
             '</div>') +
       '</div>' +
 
