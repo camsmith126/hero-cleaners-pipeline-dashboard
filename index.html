@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260720T184239">
+<meta name="hc-build-id" content="20260720T184937">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -285,56 +285,65 @@
   .checkin-status.in-progress  { background: #FEF3C7; color: #B45309; }
   .checkin-status.pending      { background: #E4E7EB; color: var(--text-muted); }
   .checkin-attempts {
-    padding: 10px 16px; display: flex; flex-direction: column; gap: 8px;
+    padding: 10px 16px; display: flex; flex-direction: column; gap: 6px;
     border-bottom: 1px solid var(--border);
   }
-  .checkin-attempt.done {
-    background: #F9FAFB; padding: 8px 10px; border-radius: 4px;
-    font-size: 12px; display: grid;
-    grid-template-columns: auto 1fr auto; column-gap: 10px; row-gap: 6px;
+  .checkin-attempt {
+    display: grid; grid-template-columns: 80px 1fr auto;
+    column-gap: 12px; align-items: center;
+    padding: 8px 10px; border-radius: 4px;
+    background: #F9FAFB; font-size: 12px;
   }
-  .checkin-attempt .ca-n { font-weight: 700; }
+  .checkin-attempt.done    { background: #F9FAFB; }
+  .checkin-attempt.active  { background: #FFFBEB; border: 1px solid #FEF3C7; }
+  .checkin-attempt.pending { background: #FAFAFB; opacity: 0.6; }
+  .checkin-attempt .ca-n { font-weight: 700; color: var(--hero-black); }
   .checkin-attempt .ca-r { color: var(--slate); }
-  .checkin-attempt .ca-when { color: var(--text-muted); }
+  .checkin-attempt .ca-r.reached { color: #059669; font-weight: 600; }
+  .checkin-attempt .ca-r.noans   { color: #B45309; font-weight: 600; }
+  .checkin-attempt .ca-r.muted   { color: var(--text-muted); font-style: italic; }
+  .checkin-attempt .ca-when { color: var(--text-muted); font-size: 11px; }
   .checkin-attempt .ca-notes {
     grid-column: 1 / -1; color: var(--hero-black);
-    font-size: 12px; padding-top: 4px; border-top: 1px dashed var(--border);
+    font-size: 12px; padding-top: 6px; margin-top: 4px;
+    border-top: 1px dashed var(--border);
   }
-  .checkin-done-banner {
-    padding: 10px 16px; background: #ECFDF5;
-    color: #065F46; font-size: 12px; font-weight: 600;
+  .checkin-attempt .ca-controls {
+    display: inline-flex; gap: 6px;
+  }
+  .checkin-attempt .ca-btn {
+    padding: 5px 12px; border: 1px solid var(--border);
+    background: #fff; border-radius: 4px; cursor: pointer;
+    font-family: inherit; font-size: 12px; font-weight: 600;
+    color: var(--hero-black);
+  }
+  .checkin-attempt .ca-btn:hover { background: #F3F4F6; }
+  .checkin-attempt .ca-btn-reached:hover { background: #D1FAE5; border-color: #059669; color: #059669; }
+  .checkin-attempt .ca-btn-noans:hover   { background: #FEF3C7; border-color: #B45309; color: #78350F; }
+  .checkin-attempt .ca-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .checkin-notes-wrap {
+    padding: 12px 16px;
+    display: flex; flex-direction: column; gap: 6px;
     border-bottom: 1px solid var(--border);
   }
-  .checkin-done-banner.warn { background: #FEF3C7; color: #78350F; }
-  .checkin-active {
-    padding: 12px 16px;
-    display: flex; flex-direction: column; gap: 10px;
-  }
-  .checkin-active .ca-label {
+  .checkin-notes-wrap .ca-label {
     font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
     color: var(--text-muted); font-weight: 700;
   }
-  .checkin-active .ca-controls {
-    display: flex; gap: 8px;
-  }
-  .checkin-active .ca-btn {
-    padding: 8px 14px; border: 1px solid var(--border);
-    background: #fff; border-radius: 4px; cursor: pointer;
-    font-family: inherit; font-size: 13px; font-weight: 600;
-    color: var(--hero-black);
-  }
-  .checkin-active .ca-btn:hover { background: #F3F4F6; }
-  .checkin-active .ca-btn:first-child:hover { background: #D1FAE5; border-color: #059669; }
-  .checkin-active .ca-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-  .checkin-active .ca-notes-input {
+  .checkin-notes-wrap .ca-notes-input {
     width: 100%; min-height: 60px; padding: 8px 10px;
     border: 1px solid var(--border); border-radius: 4px;
     font-family: inherit; font-size: 13px; resize: vertical;
     box-sizing: border-box;
   }
-  .checkin-active .ca-notes-input:focus {
+  .checkin-notes-wrap .ca-notes-input:focus {
     outline: 2px solid var(--hero-red); outline-offset: -1px;
   }
+  .checkin-done-banner {
+    padding: 10px 16px; background: #ECFDF5;
+    color: #065F46; font-size: 12px; font-weight: 600;
+  }
+  .checkin-done-banner.warn { background: #FEF3C7; color: #78350F; }
 
   /* 2026-07-19: Customers tab (data view) */
   .cust-header { padding: 22px 24px 10px; }
@@ -5340,42 +5349,59 @@
     const attempts = rosterAttemptsFor(c, step);
     const done = isCheckinDone(c, step);
     const reached = attempts.find(function(a){ return a.event_data && a.event_data.answered === true; });
-    const nextAttemptN = attempts.length + 1;
-    const attemptsExhausted = attempts.length >= 3;
-    const canLogMore = !done && !attemptsExhausted;
+    const activeIdx = attempts.length;  // 0-based; the next attempt to log
+    const canLogMore = !done && attempts.length < 3;
 
-    const priorRows = attempts.map(function(a, i){
-      const ans = a.event_data && a.event_data.answered;
-      const label = ans ? 'Reached' : 'No answer';
-      const notes = (a.event_data && a.event_data.notes) || '';
-      const when = a.logged_at ? fmtDateShort(a.logged_at.slice(0,10)) : '';
-      return '<div class="checkin-attempt done">' +
-        '<span class="ca-n">Attempt ' + (i + 1) + '</span>' +
-        '<span class="ca-r">' + (ans ? '✓ ' : '✗ ') + esc(label) + '</span>' +
-        '<span class="ca-when">' + esc(when) + '</span>' +
-        (notes ? '<div class="ca-notes">' + esc(notes) + '</div>' : '') +
+    // Always render 3 attempt rows — Done / Active / Waiting (matches
+    // Jaylee's recurring-pitch tracker pattern per Cam 2026-07-19).
+    const attemptRows = [0, 1, 2].map(function(i){
+      const n = i + 1;
+      const prior = attempts[i];
+      if (prior) {
+        const ans = prior.event_data && prior.event_data.answered;
+        const notes = (prior.event_data && prior.event_data.notes) || '';
+        const when = prior.logged_at ? fmtDateShort(prior.logged_at.slice(0, 10)) : '';
+        return '<div class="checkin-attempt done">' +
+          '<span class="ca-n">Attempt ' + n + '</span>' +
+          '<span class="ca-r ' + (ans ? 'reached' : 'noans') + '">' +
+            (ans ? '✓ Reached' : '✗ No answer') +
+          '</span>' +
+          '<span class="ca-when">' + esc(when) + '</span>' +
+          (notes ? '<div class="ca-notes">' + esc(notes) + '</div>' : '') +
+        '</div>';
+      }
+      if (i === activeIdx && canLogMore) {
+        return '<div class="checkin-attempt active" data-active-attempt="' + n + '">' +
+          '<span class="ca-n">Attempt ' + n + '</span>' +
+          '<span class="ca-controls">' +
+            '<button type="button" class="ca-btn ca-btn-reached" data-answered="true"  data-step="' + step + '">Reached them</button>' +
+            '<button type="button" class="ca-btn ca-btn-noans"   data-answered="false" data-step="' + step + '">No answer</button>' +
+          '</span>' +
+        '</div>';
+      }
+      // Pending (waiting on prior attempt) OR check-in already done
+      const waitLabel = done ? '—' : ('Waiting on attempt ' + (n - 1));
+      return '<div class="checkin-attempt pending">' +
+        '<span class="ca-n">Attempt ' + n + '</span>' +
+        '<span class="ca-r muted">' + esc(waitLabel) + '</span>' +
       '</div>';
     }).join('');
 
-    let activeBlock = '';
-    if (canLogMore) {
-      activeBlock =
-        '<div class="checkin-active" data-checkin-active="' + step + '">' +
-          '<div class="ca-label">Attempt ' + nextAttemptN + '</div>' +
-          '<div class="ca-controls">' +
-            '<button type="button" class="ca-btn" data-answered="true"  data-step="' + step + '">Reached them</button>' +
-            '<button type="button" class="ca-btn" data-answered="false" data-step="' + step + '">No answer</button>' +
-          '</div>' +
-          '<textarea class="ca-notes-input" data-notes-for="' + step + '" placeholder="Conversation summary — captured when you mark Reached."></textarea>' +
-        '</div>';
-    }
+    // Notes textarea (single per check-in — used when logging a Reached
+    // attempt). Only shown when a new attempt can be logged.
+    const notesBlock = canLogMore
+      ? '<div class="checkin-notes-wrap">' +
+          '<label class="ca-label">Conversation summary</label>' +
+          '<textarea class="ca-notes-input" data-notes-for="' + step + '" placeholder="Notes captured when you mark Reached. Leave blank for No-answer attempts."></textarea>' +
+        '</div>'
+      : '';
 
     let doneBanner = '';
     if (done) {
-      const label = reached ? 'Reached · check-in complete' : 'Marked complete after 3 no-answers';
+      const label = reached
+        ? 'Check-in complete — you reached them.'
+        : 'Marked complete after 3 no-answers.';
       doneBanner = '<div class="checkin-done-banner">✓ ' + esc(label) + '</div>';
-    } else if (attemptsExhausted) {
-      doneBanner = '<div class="checkin-done-banner warn">3 attempts logged — mark this check-in closed via any Reached attempt or leave open for now.</div>';
     }
 
     const statusBadge = done
@@ -5388,9 +5414,9 @@
       '<div class="checkin-head">' +
         '<div class="checkin-name">Check-in ' + step + '</div>' + statusBadge +
       '</div>' +
-      (priorRows ? '<div class="checkin-attempts">' + priorRows + '</div>' : '') +
+      '<div class="checkin-attempts">' + attemptRows + '</div>' +
+      notesBlock +
       doneBanner +
-      activeBlock +
     '</div>';
   }
 
