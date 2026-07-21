@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260721T163601">
+<meta name="hc-build-id" content="20260721T164154">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -3354,7 +3354,7 @@
       if (prior) {
         const ans = prior.event_data && prior.event_data.answered;
         const notes = (prior.event_data && prior.event_data.notes) || '';
-        const when = prior.logged_at ? fmtDateShort(prior.logged_at.slice(0, 10)) : '';
+        const when = fmtLogged(prior);
         // Undo button — visible on the LATEST attempt (top of the stack)
         // so Halee can back out her last save. Sequential undos work by
         // repeatedly clicking the newest done row's ×.
@@ -3614,6 +3614,19 @@
     if (isNaN(d.getTime())) return '—';
     return d.toLocaleString(undefined, {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'});
   }
+  // Cam 2026-07-21: every saved/logged item should show WHEN and WHO.
+  // Reads {logged_at, logged_by} off an action row and returns a compact
+  // timestamp+attribution string like "Jul 20, 3:45 PM · Halee".
+  function fmtLogged(action) {
+    if (!action) return '';
+    const when = fmtDateTime(action.logged_at);
+    const by = action.logged_by;
+    const byPretty = by ? (by.charAt(0).toUpperCase() + by.slice(1)) : '';
+    if (when === '—' && !byPretty) return '';
+    if (!byPretty) return when;
+    if (when === '—') return 'by ' + byPretty;
+    return when + ' · ' + byPretty;
+  }
 
   const OWNER_LABEL = {
     auto: 'Automatic', jaylee: 'Jaylee', cleaner: 'Cleaner', halee: 'Halee'
@@ -3662,8 +3675,10 @@
         || (n === 8 && actionByStage.first_check_in[0]  && actionByStage.first_check_in[0].logged_at)
         || (n === 9 && actionByStage.second_check_in[0] && actionByStage.second_check_in[0].logged_at)
         || null;
+      // 2026-07-21 (Cam): every populated stage shows a timestamp — datetime
+      // for anything logged by a human, autodate for HCP-derived stages.
       const whenStr = whenIso
-        ? (n === 8 || n === 9 ? fmtDateTime(whenIso) : fmtDateShort(whenIso))
+        ? ((n === 1 || n === 3 || n === 7) ? fmtDateShort(whenIso) : fmtDateTime(whenIso))
         : '—';
       items.push(
         '<div class="history-item ' + klass + '">' +
@@ -3995,7 +4010,7 @@
     }).map(function(a){
       const n = parseInt(a.stage_name.slice(-1), 10);
       const d = a.event_data || {};
-      return {n:n, answered: !!d.answered, outcome: d.outcome || '', logged_at: a.logged_at};
+      return {n:n, answered: !!d.answered, outcome: d.outcome || '', logged_at: a.logged_at, logged_by: a.logged_by};
     }).sort(function(a,b){ return a.n - b.n; });
     const nextAttempt = Math.min(priors.length + 1, 3);
     const attemptsClosed = priors.length >= 3;
@@ -4008,7 +4023,7 @@
           : '';
         return '<div class="pitch-attempt done"><span class="pitch-attempt-n">Attempt ' + n + '</span>' +
           '<span class="pitch-attempt-result">✓ ' + esc(lbl) + esc(outc) + '</span>' +
-          '<span class="pitch-attempt-when">' + esc(fmtDateShort(prior.logged_at)) + '</span></div>';
+          '<span class="pitch-attempt-when">' + esc(fmtLogged(prior)) + '</span></div>';
       }
       const isActive = (n === nextAttempt);
       return '<div class="pitch-attempt' + (isActive ? ' active' : ' pending') + '">' +
@@ -4216,7 +4231,7 @@
     }).map(function(a){
       const n = parseInt(a.stage_name.slice(-1), 10);
       const d = a.event_data || {};
-      return {n: n, answered: !!d.answered, notes: d.notes || '', logged_at: a.logged_at};
+      return {n: n, answered: !!d.answered, notes: d.notes || '', logged_at: a.logged_at, logged_by: a.logged_by};
     }).sort(function(a,b){ return a.n - b.n; });
 
     const populated = !!closeOut;
@@ -4263,7 +4278,7 @@
         return '<div class="pitch-attempt done">' +
           '<span class="pitch-attempt-n">Attempt ' + n + '</span>' +
           '<span class="pitch-attempt-result">✓ ' + esc(lbl) + '</span>' +
-          '<span class="pitch-attempt-when">' + esc(fmtDateShort(prior.logged_at)) + '</span>' +
+          '<span class="pitch-attempt-when">' + esc(fmtLogged(prior)) + '</span>' +
         '</div>';
       }
       const isActive = (n === nextAttempt);
@@ -4604,7 +4619,7 @@
       const d = a.event_data || {};
       return {
         n: n, answered: !!d.answered, outcome: d.outcome || '',
-        notes: d.notes || '', logged_at: a.logged_at
+        notes: d.notes || '', logged_at: a.logged_at, logged_by: a.logged_by
       };
     }).sort(function(a,b){ return a.n - b.n; });
   }
@@ -4641,7 +4656,7 @@
         return '<div class="pitch-attempt done">' +
           '<span class="pitch-attempt-n">Attempt ' + n + '</span>' +
           '<span class="pitch-attempt-result">✓ ' + esc(label) + esc(outcome) + '</span>' +
-          '<span class="pitch-attempt-when">' + esc(fmtDateShort(prior.logged_at)) + '</span>' +
+          '<span class="pitch-attempt-when">' + esc(fmtLogged(prior)) + '</span>' +
         '</div>';
       }
       const isActive = (n === nextAttempt);
