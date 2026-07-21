@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260720T183754">
+<meta name="hc-build-id" content="20260720T184239">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -3955,6 +3955,93 @@
     if (resp.status === 204) return null;
     return resp.json();
   }
+
+  // ---- 2026-07-19: live Supabase polling ---------------------------------
+  // So Halee's roster check-ins and Jaylee's form saves surface for other
+  // viewers without waiting for the daily 6 AM sync. Polls every 60s + on
+  // tab focus. Fetches customer_actions + customer_profiles from Supabase,
+  // merges into local CUSTOMERS, and re-renders the current tab.
+  //
+  // What DOESN'T live-sync yet:
+  //   * classifier-derived fields (pipeline_stage.current_stage, is_recurring,
+  //     established, etc.) — those recompute in the nightly pipeline run.
+  //     A customer's stage only updates in the local view if the classifier
+  //     runs again. This is fine for check-ins (which show as boxes/rows
+  //     without changing stage) and for pitch outcomes (which do change
+  //     stage, but the display reflects the action row visibility).
+  //   * overrides / cancellations (Supabase tables) — not currently polled
+  //     because the pipeline dashboard doesn't render them directly. If we
+  //     need those live, extend hydrateFromSupabase.
+  let __supabasePollBusy = false;
+  let __lastSupabaseHydrate = 0;
+
+  async function hydrateFromSupabase() {
+    if (!SB.enabled) return;
+    if (__supabasePollBusy) return;
+    __supabasePollBusy = true;
+    try {
+      const [actions, profiles] = await Promise.all([
+        sb('customer_actions?select=customer_id,stage_name,event_data,logged_at,logged_by&order=logged_at.asc&limit=10000'),
+        sb('customer_profiles?select=*&limit=10000'),
+      ]);
+
+      // Merge actions per customer.
+      const actionsByCid = Object.create(null);
+      for (const a of (actions || [])) {
+        if (!actionsByCid[a.customer_id]) actionsByCid[a.customer_id] = [];
+        actionsByCid[a.customer_id].push(a);
+      }
+      // Merge profiles per customer.
+      const profilesByCid = Object.create(null);
+      for (const p of (profiles || [])) {
+        profilesByCid[p.customer_id] = p;
+      }
+
+      let changed = false;
+      for (const c of CUSTOMERS) {
+        const newActs = actionsByCid[c.customer_id] || [];
+        // Cheap change detection: length + last logged_at.
+        const cur = c.pipeline_actions || [];
+        const curKey = cur.length + '|' + ((cur[cur.length - 1] || {}).logged_at || '');
+        const newKey = newActs.length + '|' + ((newActs[newActs.length - 1] || {}).logged_at || '');
+        if (curKey !== newKey) {
+          c.pipeline_actions = newActs;
+          changed = true;
+        }
+        const newProf = profilesByCid[c.customer_id];
+        if (newProf) {
+          const curProfUpd = (c.customer_profile && c.customer_profile.updated_at) || '';
+          const newProfUpd = newProf.updated_at || '';
+          if (curProfUpd !== newProfUpd) {
+            c.customer_profile = newProf;
+            changed = true;
+          }
+        }
+      }
+
+      __lastSupabaseHydrate = Date.now();
+      if (changed) {
+        // Re-render whatever tab is currently open.
+        renderTab();
+      }
+    } catch (e) {
+      console.warn('Supabase hydrate failed:', e && e.message ? e.message : e);
+    } finally {
+      __supabasePollBusy = false;
+    }
+  }
+
+  // Poll every 60s. Also refresh on tab focus (throttled to once per 5s).
+  setInterval(hydrateFromSupabase, 60 * 1000);
+  document.addEventListener('visibilitychange', function(){
+    if (document.hidden) return;
+    const now = Date.now();
+    if (now - __lastSupabaseHydrate < 5000) return;
+    hydrateFromSupabase();
+  });
+  // And once ~3s after load so anyone opening the page sees the latest
+  // saves without waiting a full minute.
+  setTimeout(hydrateFromSupabase, 3000);
 
   function toast(msg, isErr) {
     const el = document.getElementById('toast');
