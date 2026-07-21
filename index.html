@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260720T212311">
+<meta name="hc-build-id" content="20260720T213429">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1286,7 +1286,6 @@
   <button type="button" role="tab" data-tab="all"       id="tabBtnAll">Pipeline <span class="tab-count" id="tabCountAll">216</span></button>
   <button type="button" role="tab" data-tab="roster"    id="tabBtnRoster">Roster <span class="tab-count" id="tabCountRoster"></span></button>
   <button type="button" role="tab" data-tab="customers" id="tabBtnCustomers">Customers <span class="tab-count" id="tabCountCustomers"></span></button>
-  <button type="button" role="tab" data-tab="halee"     id="tabBtnHalee">Halee <span class="tab-count" id="tabCountHalee">46</span></button>
   <button type="button" role="tab" data-tab="jaylee"    id="tabBtnJaylee">Jaylee <span class="tab-count" id="tabCountJaylee">9</span></button>
 </nav>
 
@@ -1294,7 +1293,6 @@
   <div class="kpi"><div class="label">Total customers</div><div class="value" id="kpiTotal">216</div></div>
   <div class="kpi done-green"><div class="label">In active pipeline</div><div class="value" id="kpiActive">70</div></div>
   <div class="kpi hero-red"><div class="label">Awaiting Jaylee</div><div class="value" id="kpiJaylee">9</div></div>
-  <div class="kpi"><div class="label">Awaiting Halee</div><div class="value" id="kpiHalee">46</div></div>
   <div class="kpi"><div class="label">Lost</div><div class="value" id="kpiLost">146</div></div>
 </div>
 
@@ -3920,8 +3918,9 @@
   <!-- Customers tab — data view; customers land here as they move through the pipeline -->
   <div id="tabPanelCustomers" class="tab-panel" role="tabpanel" hidden></div>
 
-  <!-- Halee's focus tab (rendered client-side from CUSTOMERS array) -->
-  <div id="tabPanelHalee"  class="tab-panel" role="tabpanel" hidden></div>
+  <!-- 2026-07-20: Halee's focus tab retired. Her calendar + workflow now
+       live inside the Roster tab above (top of the tab, filtered to the
+       New Recurring customers). -->
 
   <!-- Jaylee's focus tab -->
   <div id="tabPanelJaylee" class="tab-panel" role="tabpanel" hidden></div>
@@ -4205,18 +4204,20 @@
     return false;
   }
 
-  // ---- Phase 3: Tab nav (Pipeline / Roster / Customers / Halee / Jaylee) ----
+  // ---- Phase 3: Tab nav (Pipeline / Roster / Customers / Jaylee) ----
+  // 2026-07-20: Halee tab removed — her workflow lives inside Roster now.
   const TAB_KEY = 'hc:pipeline:v1:tab';
-  const VALID_TABS = {all:1, roster:1, customers:1, halee:1, jaylee:1};
+  const VALID_TABS = {all:1, roster:1, customers:1, jaylee:1};
 
   function currentTab() {
     try {
       const v = localStorage.getItem(TAB_KEY);
       if (v && VALID_TABS[v]) return v;
     } catch (_) {}
-    // Default: match identity if it maps to a focus tab; otherwise "all".
+    // Default: Halee → Roster (her new home), Jaylee → jaylee, else Pipeline.
     const id = currentIdentity();
-    if (id === 'halee' || id === 'jaylee') return id;
+    if (id === 'halee')  return 'roster';
+    if (id === 'jaylee') return 'jaylee';
     return 'all';
   }
   function setTab(t) {
@@ -4235,7 +4236,6 @@
     document.getElementById('tabPanelAll'      ).hidden = (t !== 'all');
     document.getElementById('tabPanelRoster'   ).hidden = (t !== 'roster');
     document.getElementById('tabPanelCustomers').hidden = (t !== 'customers');
-    document.getElementById('tabPanelHalee'    ).hidden = (t !== 'halee');
     document.getElementById('tabPanelJaylee'   ).hidden = (t !== 'jaylee');
     // Hide the top KPI strip on non-Pipeline tabs (each has its own stats)
     document.getElementById('kpiStrip').style.display = (t === 'all' ? '' : 'none');
@@ -4243,7 +4243,6 @@
     if (t === 'all')       renderPipelineSubTab();
     if (t === 'roster')    renderRosterTab(document.getElementById('tabPanelRoster'));
     if (t === 'customers') renderCustomersTab(document.getElementById('tabPanelCustomers'));
-    if (t === 'halee')  renderFocusTab('halee',  document.getElementById('tabPanelHalee'));
     if (t === 'jaylee') renderFocusTab('jaylee', document.getElementById('tabPanelJaylee'));
   }
 
@@ -4429,18 +4428,15 @@
 
     // 3. Recompute tab-count badges + KPI strip values.
     const inCohort = customersInCohort();
-    const haleeCt  = haleeCustomers().length;
     const jayleeCt = jayleeCustomers().length;
     const setText = function(id, v) {
       const el = document.getElementById(id);
       if (el) el.textContent = String(v);
     };
     setText('tabCountAll',    inCohort.length);
-    setText('tabCountHalee',  haleeCt);
     setText('tabCountJaylee', jayleeCt);
     setText('kpiTotal',       visibleTotal);
     setText('kpiActive',      visibleActive);
-    setText('kpiHalee',       haleeCt);
     setText('kpiJaylee',      jayleeCt);
     setText('kpiLost',        visibleLost);
 
@@ -5332,6 +5328,68 @@
       '</div>';
     };
 
+    // 2026-07-20 (Cam): 4-week rolling calendar filtered to New Recurring
+    // customers. This is what used to live on Halee's tab — she works out
+    // of the Roster now, so her calendar comes with her. Only shows the
+    // first-clean / first-recurring-visit chips for customers Jaylee has
+    // sold on recurring but who haven't hit their first recurring yet
+    // (i.e. everyone in the New Recurring section below).
+    const today = todayDate();
+    const wkStart = weekStart(today);
+    const numWeeks = 4;
+    const windowEnd = new Date(wkStart); windowEnd.setDate(windowEnd.getDate() + (numWeeks * 7) - 1);
+    const days = Array.from({length: numWeeks * 7}, function(_, i){
+      const d = new Date(wkStart); d.setDate(d.getDate() + i); return d;
+    });
+    const byDay = days.map(function(){ return []; });
+    newConverts.forEach(function(c){
+      const due = actionDueDate(c);
+      if (!due || due < wkStart || due > windowEnd) return;
+      const idx = daysBetween(due, wkStart);
+      byDay[idx].push(c);
+    });
+    const dayHeadNames = ['MON','TUE','WED','THU','FRI','SAT','SUN'];
+    const calHeadHtml =
+      '<div class="month-cal-head">' +
+        '<div class="week-col-head"></div>' +
+        dayHeadNames.map(function(n){ return '<div class="day-head">' + n + '</div>'; }).join('') +
+      '</div>';
+    const calRowsHtml = Array.from({length: numWeeks}, function(_, w){
+      const rowStart = new Date(wkStart); rowStart.setDate(rowStart.getDate() + (w * 7));
+      const label = rowStart.toLocaleDateString(undefined, {month:'short', day:'numeric'});
+      const cells = Array.from({length: 7}, function(_, i){
+        const dayIdx = w * 7 + i;
+        const d = days[dayIdx];
+        const isToday = isoOf(d) === isoOf(today);
+        const isPast = !isToday && d < today;
+        const chips = byDay[dayIdx].map(function(c){
+          const cs = (c.pipeline_stage || {}).current_stage;
+          const kind = chipKindFor(cs, isToday, 'halee', c);
+          const chipLabel = shortLabelFor(c, cs, 'halee');
+          return '<div class="cal-chip ' + kind + '" data-open-cid="' + esc(c.customer_id) + '" ' +
+                 'title="' + esc(chipLabel) + '">' +
+                 esc(chipLabel) + '</div>';
+        }).join('');
+        const cls = 'day-cell' + (isToday ? ' today' : (isPast ? ' past' : ''));
+        return '<div class="' + cls + '">' +
+          '<div class="day-num">' + fmtDayNum(d) + '</div>' +
+          chips +
+        '</div>';
+      }).join('');
+      return '<div class="month-cal-row">' +
+        '<div class="week-label">Week of<br>' + esc(label) + '</div>' +
+        cells +
+      '</div>';
+    }).join('');
+    const calendarHtml =
+      '<h3 class="roster-section-head">Halee\'s 4-week calendar <span class="tab-count">' + newConverts.length + '</span></h3>' +
+      '<div class="roster-section-help">' +
+        'Rolling 30 days for the New Recurring customers below (first-time cleans + first recurring visits). ' +
+        'Jaylee sells them on recurring and schedules the future cleans; Halee picks it up from here. ' +
+        'Click any chip to open that customer\'s panel.' +
+      '</div>' +
+      '<div class="month-cal">' + calHeadHtml + calRowsHtml + '</div>';
+
     container.innerHTML =
       '<div class="roster-header">' +
         '<div class="focus-title">Recurring Roster</div>' +
@@ -5342,6 +5400,8 @@
           '<span class="roster-count">' + filtered.length + ' shown</span>' +
         '</div>' +
       '</div>' +
+
+      calendarHtml +
 
       '<h3 class="roster-section-head">New Recurring <span class="tab-count">' + newConverts.length + '</span></h3>' +
       '<div class="roster-section-help">' +
@@ -5419,6 +5479,15 @@
         const kind = row.getAttribute('data-roster-kind');
         if (kind === 'new-convert') openPanel(cid);
         else openRosterPanel(cid);
+      });
+    });
+    // Calendar chips → open the 10-stage detail panel (same as new-convert
+    // cards). All chips render New Recurring customers, so openPanel is
+    // always the right destination.
+    container.querySelectorAll('.cal-chip[data-open-cid]').forEach(function(chip){
+      chip.addEventListener('click', function(ev){
+        ev.stopPropagation();
+        openPanel(chip.getAttribute('data-open-cid'));
       });
     });
   }
