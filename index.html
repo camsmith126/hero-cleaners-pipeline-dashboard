@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260720T185232">
+<meta name="hc-build-id" content="20260720T190103">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -253,8 +253,14 @@
     cursor: pointer;
   }
   .roster-box:hover { background: #F3F4F6; }
-  .roster-box.done {
+  .roster-box.reached {
     background: #059669; border-color: #059669; color: #fff;
+  }
+  .roster-box.unreached {
+    background: #DC2626; border-color: #DC2626; color: #fff;
+  }
+  .roster-box.pending {
+    /* default styling — gray outlined */
   }
 
   /* Roster check-in panel (2026-07-19) */
@@ -305,6 +311,18 @@
   .checkin-attempt .ca-r.noans   { color: #B45309; font-weight: 600; }
   .checkin-attempt .ca-r.muted   { color: var(--text-muted); font-style: italic; }
   .checkin-attempt .ca-when { color: var(--text-muted); font-size: 11px; }
+  .checkin-attempt .ca-undo {
+    display: inline-block; margin-left: 6px;
+    width: 20px; height: 20px; padding: 0;
+    background: #fff; border: 1px solid var(--border);
+    border-radius: 50%; cursor: pointer;
+    color: var(--text-muted); font-size: 14px; font-weight: 700;
+    line-height: 1; vertical-align: middle;
+  }
+  .checkin-attempt .ca-undo:hover {
+    background: #FEE2E2; border-color: #DC2626; color: #DC2626;
+  }
+  .checkin-attempt .ca-undo:disabled { opacity: 0.4; cursor: not-allowed; }
   .checkin-attempt .ca-notes {
     grid-column: 1 / -1; color: var(--hero-black);
     font-size: 12px; padding-top: 6px; margin-top: 4px;
@@ -3993,7 +4011,7 @@
     __supabasePollBusy = true;
     try {
       const [actions, profiles] = await Promise.all([
-        sb('customer_actions?select=customer_id,stage_name,event_data,logged_at,logged_by&order=logged_at.asc&limit=10000'),
+        sb('customer_actions?select=id,customer_id,stage_name,event_data,logged_at,logged_by&order=logged_at.asc&limit=10000'),
         sb('customer_profiles?select=*&limit=10000'),
       ]);
 
@@ -5008,18 +5026,34 @@
     return (days / 365).toFixed(1) + 'y';
   }
 
-  function countRosterCheckIns(c) {
-    // Roster-tab check-ins live on customer_actions under stage_names
-    // roster_check_in_1..4. Returns how many of the 4 have been logged.
-    const stages = new Set([
-      'roster_check_in_1', 'roster_check_in_2',
-      'roster_check_in_3', 'roster_check_in_4',
-    ]);
-    const done = new Set();
+  // 2026-07-19 (Cam): status per check-in step.
+  //   'reached'   — at least one attempt logged with answered=true
+  //   'unreached' — 3 no-answer attempts and no reached
+  //   'pending'   — still working (0-2 attempts, no reached yet)
+  function checkinStatus(c, step) {
+    const target = 'roster_check_in_' + step;
+    let hasReached = false, cnt = 0;
     for (const a of (c.pipeline_actions || [])) {
-      if (stages.has(a.stage_name)) done.add(a.stage_name);
+      if (a.stage_name !== target) continue;
+      cnt += 1;
+      if (a.event_data && a.event_data.answered === true) hasReached = true;
     }
-    return done.size;
+    if (hasReached) return 'reached';
+    if (cnt >= 3)   return 'unreached';
+    return 'pending';
+  }
+
+  // Sort helper: how "far along" a customer is (reached counts most,
+  // then unreached, then pending). Used to sort the Roster table's
+  // Check-ins column.
+  function checkinProgressScore(c) {
+    let n = 0;
+    for (let step = 1; step <= 4; step++) {
+      const s = checkinStatus(c, step);
+      if (s === 'reached')   n += 2;
+      else if (s === 'unreached') n += 1;
+    }
+    return n;
   }
 
   function renderRosterTab(container) {
@@ -5050,7 +5084,7 @@
       if (col === 'price')     return c.rate || 0;
       if (col === 'first_rec') return c.first_rec_visit || c.became_recurring_at || '';
       if (col === 'tenure')    return tenureDaysOf(c) || 0;
-      if (col === 'checkins')  return countRosterCheckIns(c);
+      if (col === 'checkins')  return checkinProgressScore(c);
       return '';
     };
     filtered.sort(function(a, b){
@@ -5079,10 +5113,12 @@
           const rate = c.rate ? '$' + Number(c.rate).toFixed(0) : '—';
           const frv = c.first_rec_visit ? fmtDateShort(c.first_rec_visit) : '—';
           const tenure = tenureLabel(tenureDaysOf(c));
-          const done = countRosterCheckIns(c);
           const boxes = [1,2,3,4].map(function(n){
-            const cls = 'roster-box' + (n <= done ? ' done' : '');
-            return '<span class="' + cls + '" data-roster-checkin="' + n + '" data-cid="' + esc(c.customer_id) + '" title="Check-in ' + n + '">' + n + '</span>';
+            const status = checkinStatus(c, n);
+            const title = 'Check-in ' + n + ' · ' +
+              (status === 'reached'   ? 'reached'   :
+               status === 'unreached' ? 'no answer after 3 attempts' : 'pending');
+            return '<span class="roster-box ' + status + '" data-roster-checkin="' + n + '" data-cid="' + esc(c.customer_id) + '" title="' + esc(title) + '">' + n + '</span>';
           }).join('');
           return '<tr class="roster-row" data-open-cid="' + esc(c.customer_id) + '">' +
             '<td><a href="#" onclick="event.preventDefault()"><strong>' + esc(c.display_name || '') + '</strong></a></td>' +
@@ -5367,12 +5403,19 @@
         const ans = prior.event_data && prior.event_data.answered;
         const notes = (prior.event_data && prior.event_data.notes) || '';
         const when = prior.logged_at ? fmtDateShort(prior.logged_at.slice(0, 10)) : '';
+        // Undo button — visible on the LATEST attempt (top of the stack)
+        // so Halee can back out her last save. Sequential undos work by
+        // repeatedly clicking the newest done row's ×.
+        const isLatest = (i === attempts.length - 1) && prior.id != null;
+        const undoBtn = isLatest
+          ? '<button type="button" class="ca-undo" data-undo-id="' + prior.id + '" data-step="' + step + '" title="Remove this attempt">×</button>'
+          : '';
         return '<div class="checkin-attempt done">' +
           '<span class="ca-n">Attempt ' + n + '</span>' +
           '<span class="ca-r ' + (ans ? 'reached' : 'noans') + '">' +
             (ans ? '✓ Reached' : '✗ No answer') +
           '</span>' +
-          '<span class="ca-when">' + esc(when) + '</span>' +
+          '<span class="ca-when">' + esc(when) + undoBtn + '</span>' +
           (notes ? '<div class="ca-notes">' + esc(notes) + '</div>' : '') +
         '</div>';
       }
@@ -5453,6 +5496,15 @@
         saveRosterAttempt(step, answered, notes, btn);
       });
     });
+    // Undo × click → delete the attempt from Supabase, refresh view.
+    bodyEl.querySelectorAll('.ca-undo').forEach(function(btn){
+      btn.addEventListener('click', function(ev){
+        ev.stopPropagation();
+        const id = btn.getAttribute('data-undo-id');
+        const step = parseInt(btn.getAttribute('data-step'), 10);
+        deleteRosterAttempt(id, step, btn);
+      });
+    });
   }
 
   async function saveRosterAttempt(step, answered, notes, btnEl) {
@@ -5468,7 +5520,10 @@
         answered: answered,
         notes: notes || null,
       };
-      await sb('customer_actions', {
+      // Supabase returns the inserted row(s) when Prefer=return=representation
+      // is set (default in our sb() wrapper). Capture the id so undo works
+      // immediately without waiting for the next poll.
+      const resp = await sb('customer_actions', {
         method: 'POST',
         body: JSON.stringify({
           customer_id: c.customer_id,
@@ -5477,18 +5532,18 @@
           logged_by:   loggedBy(),
         }),
       });
-      // Optimistic local update so the panel + table reflect the change
-      // immediately (avoids waiting for the daily-run mirror).
+      const inserted = Array.isArray(resp) && resp.length ? resp[0] : null;
+      // Optimistic local update.
       if (!c.pipeline_actions) c.pipeline_actions = [];
       c.pipeline_actions.push({
+        id:         inserted ? inserted.id : null,
         stage_name: 'roster_check_in_' + step,
         event_data: eventData,
-        logged_at:  new Date().toISOString(),
+        logged_at:  (inserted && inserted.logged_at) || new Date().toISOString(),
       });
       toast('Saved. Check-in ' + step + ' · attempt ' + eventData.attempt_number + ' — ' +
             (answered ? 'reached.' : 'no answer.'));
       renderRosterPanel();
-      // Refresh the roster table under the panel so boxes update.
       const container = document.getElementById('tabPanelRoster');
       if (container && !container.hidden) renderRosterTab(container);
     } catch (err) {
@@ -5496,6 +5551,33 @@
       toast('Save failed — ' + err.message, true);
       btnEl.disabled = false;
       btnEl.textContent = prevText;
+    }
+  }
+
+  async function deleteRosterAttempt(actionId, step, btnEl) {
+    if (!actionId) {
+      toast('Cannot undo this attempt yet — refresh the page and try again.', true);
+      return;
+    }
+    if (!requireIdentity()) return;
+    const c = CURRENT.customer;
+    btnEl.disabled = true;
+    try {
+      await sb('customer_actions?id=eq.' + encodeURIComponent(actionId), {
+        method: 'DELETE',
+      });
+      // Remove from local pipeline_actions.
+      c.pipeline_actions = (c.pipeline_actions || []).filter(function(a){
+        return String(a.id) !== String(actionId);
+      });
+      toast('Attempt removed from check-in ' + step + '.');
+      renderRosterPanel();
+      const container = document.getElementById('tabPanelRoster');
+      if (container && !container.hidden) renderRosterTab(container);
+    } catch (err) {
+      console.error(err);
+      toast('Undo failed — ' + err.message, true);
+      btnEl.disabled = false;
     }
   }
   function closePanel() {
