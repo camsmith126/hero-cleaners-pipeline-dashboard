@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260721T142338">
+<meta name="hc-build-id" content="20260721T163601">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -379,6 +379,25 @@
   .checkin-attempt .ca-btn-reached:hover { background: #D1FAE5; border-color: #059669; color: #059669; }
   .checkin-attempt .ca-btn-noans:hover   { background: #FEF3C7; border-color: #B45309; color: #78350F; }
   .checkin-attempt .ca-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  /* 2026-07-21: selected state — pill fills solid when clicked. Save happens
+     from the Save button below, not on the pill click itself. */
+  .checkin-attempt .ca-btn-reached.selected {
+    background: #059669; border-color: #059669; color: #fff; font-weight: 600;
+  }
+  .checkin-attempt .ca-btn-noans.selected {
+    background: #B45309; border-color: #B45309; color: #fff; font-weight: 600;
+  }
+  .checkin-save-row {
+    display: flex; justify-content: flex-end; gap: 8px;
+    margin-top: 8px;
+  }
+  .checkin-save-btn {
+    background: var(--hero-red); color: #fff; border: none;
+    padding: 8px 18px; border-radius: 4px; font-weight: 600;
+    cursor: pointer; font-size: 13px;
+  }
+  .checkin-save-btn:hover { opacity: 0.9; }
+  .checkin-save-btn:disabled { background: #9CA3AF; cursor: not-allowed; }
   .checkin-notes-wrap {
     padding: 12px 16px;
     display: flex; flex-direction: column; gap: 6px;
@@ -3044,7 +3063,7 @@
 
       '<h3 class="roster-section-head">New Recurring <span class="tab-count">' + newConverts.length + '</span></h3>' +
       '<div class="roster-section-help">' +
-        'Just sold on recurring — first recurring clean still upcoming. They flow through the 10-step pipeline (Jaylee: stages 1-6, Halee: stages 7-10). Click a card to open the 10-stage detail panel. Once they hit Retained (stage 10), they graduate to Established below with Check-in 1 auto-marked.' +
+        'Just sold on recurring — first recurring clean still upcoming. They flow through the 10-step pipeline (Jaylee: stages 1-6, Halee: stages 7-10). Click a card to open the 10-stage detail panel. Once they hit Retained (stage 10), they graduate to the Retained section below with Check-in 1 auto-marked.' +
       '</div>' +
       '<div class="roster-cards-wrap">' +
         (newConverts.length
@@ -3056,13 +3075,13 @@
             '</div>') +
       '</div>' +
 
-      '<h3 class="roster-section-head">Established <span class="tab-count">' + established.length + '</span></h3>' +
+      '<h3 class="roster-section-head">Retained <span class="tab-count">' + established.length + '</span></h3>' +
       '<div class="roster-section-help">' +
         'Recurring customers Halee tracks through 4 ongoing check-ins. Sort by First recurring to prioritize newer ones.' +
       '</div>' +
       tableHtml(
         established,
-        (filter ? 'No established customers match your filter.' : 'Nobody on the established roster yet.'),
+        (filter ? 'No retained customers match your filter.' : 'Nobody on the retained roster yet.'),
         establishedRowHtml,
         'Check-ins'
       );
@@ -3373,12 +3392,17 @@
       '</div>';
     }).join('');
 
-    // Notes textarea (single per check-in — used when logging a Reached
-    // attempt). Only shown when a new attempt can be logged.
+    // Notes textarea + explicit Save button (Cam 2026-07-21). Flow is now
+    // select-then-save: click Reached/No answer to arm the pill (color
+    // change), type notes if Reached, then hit Save. Notes required only
+    // for Reached; validation happens on Save.
     const notesBlock = canLogMore
       ? '<div class="checkin-notes-wrap">' +
           '<label class="ca-label">Conversation summary</label>' +
           '<textarea class="ca-notes-input" data-notes-for="' + step + '" placeholder="Notes captured when you mark Reached. Leave blank for No-answer attempts."></textarea>' +
+        '</div>' +
+        '<div class="checkin-save-row">' +
+          '<button type="button" class="checkin-save-btn" data-checkin-save="' + step + '" disabled>Save attempt</button>' +
         '</div>'
       : '';
 
@@ -3413,12 +3437,40 @@
   }
 
   function wireRosterPanel() {
-    // Attempt button click → log via Supabase, then re-render.
+    // 2026-07-21 (Cam): select-then-save flow. Clicking Reached/No answer
+    // toggles the pill\'s selected state (color fill) but doesn\'t save.
+    // Save happens on the Save button click, which validates that notes
+    // are present when Reached.
     bodyEl.querySelectorAll('.ca-btn').forEach(function(btn){
       btn.addEventListener('click', function(){
-        if (!requireIdentity()) return;
         const step = parseInt(btn.getAttribute('data-step'), 10);
-        const answered = btn.getAttribute('data-answered') === 'true';
+        const wasSelected = btn.classList.contains('selected');
+        // Clear both pills in this attempt row first
+        const row = btn.closest('[data-active-attempt]');
+        if (row) row.querySelectorAll('.ca-btn').forEach(function(b){ b.classList.remove('selected'); });
+        // Toggle: re-clicking a selected pill deselects it
+        if (!wasSelected) btn.classList.add('selected');
+        // Enable/disable Save based on whether any pill is selected
+        const saveBtn = bodyEl.querySelector('[data-checkin-save="' + step + '"]');
+        if (saveBtn) {
+          const anySelected = !!(row && row.querySelector('.ca-btn.selected'));
+          saveBtn.disabled = !anySelected;
+        }
+      });
+    });
+    // Save button — reads which pill is selected, validates notes if Reached,
+    // then commits to Supabase.
+    bodyEl.querySelectorAll('[data-checkin-save]').forEach(function(saveBtn){
+      saveBtn.addEventListener('click', function(){
+        if (!requireIdentity()) return;
+        const step = parseInt(saveBtn.getAttribute('data-checkin-save'), 10);
+        const card = saveBtn.closest('.checkin-card');
+        const selected = card && card.querySelector('.ca-btn.selected');
+        if (!selected) {
+          toast('Pick Reached them or No answer first.', true);
+          return;
+        }
+        const answered = selected.getAttribute('data-answered') === 'true';
         const notesEl = bodyEl.querySelector('[data-notes-for="' + step + '"]');
         const notes = (notesEl && notesEl.value) ? notesEl.value.trim() : '';
         if (answered && !notes) {
@@ -3426,7 +3478,7 @@
           if (notesEl) notesEl.focus();
           return;
         }
-        saveRosterAttempt(step, answered, notes, btn);
+        saveRosterAttempt(step, answered, notes, saveBtn);
       });
     });
     // Undo × click → delete the attempt from Supabase, refresh view.
