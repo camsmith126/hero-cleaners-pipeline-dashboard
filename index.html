@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260720T184937">
+<meta name="hc-build-id" content="20260720T185232">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -284,6 +284,8 @@
   .checkin-status.done         { background: #DCFCE7; color: #059669; }
   .checkin-status.in-progress  { background: #FEF3C7; color: #B45309; }
   .checkin-status.pending      { background: #E4E7EB; color: var(--text-muted); }
+  .checkin-status.locked       { background: #F3F4F6; color: #9CA3AF; }
+  .checkin-card.is-locked      { opacity: 0.55; }
   .checkin-attempts {
     padding: 10px 16px; display: flex; flex-direction: column; gap: 6px;
     border-bottom: 1px solid var(--border);
@@ -343,7 +345,8 @@
     padding: 10px 16px; background: #ECFDF5;
     color: #065F46; font-size: 12px; font-weight: 600;
   }
-  .checkin-done-banner.warn { background: #FEF3C7; color: #78350F; }
+  .checkin-done-banner.warn   { background: #FEF3C7; color: #78350F; }
+  .checkin-done-banner.locked { background: #F3F4F6; color: #6B7280; }
 
   /* 2026-07-19: Customers tab (data view) */
   .cust-header { padding: 22px 24px 10px; }
@@ -5350,7 +5353,10 @@
     const done = isCheckinDone(c, step);
     const reached = attempts.find(function(a){ return a.event_data && a.event_data.answered === true; });
     const activeIdx = attempts.length;  // 0-based; the next attempt to log
-    const canLogMore = !done && attempts.length < 3;
+    // 2026-07-19: check-ins are sequential. Check-in N is locked until
+    // check-in N-1 is done.
+    const locked = step > 1 && !isCheckinDone(c, step - 1);
+    const canLogMore = !done && !locked && attempts.length < 3;
 
     // Always render 3 attempt rows — Done / Active / Waiting (matches
     // Jaylee's recurring-pitch tracker pattern per Cam 2026-07-19).
@@ -5379,8 +5385,12 @@
           '</span>' +
         '</div>';
       }
-      // Pending (waiting on prior attempt) OR check-in already done
-      const waitLabel = done ? '—' : ('Waiting on attempt ' + (n - 1));
+      // Pending (waiting on prior attempt) OR check-in done OR whole card locked
+      const waitLabel = locked
+        ? '—'
+        : done
+          ? '—'
+          : ('Waiting on attempt ' + (n - 1));
       return '<div class="checkin-attempt pending">' +
         '<span class="ca-n">Attempt ' + n + '</span>' +
         '<span class="ca-r muted">' + esc(waitLabel) + '</span>' +
@@ -5397,20 +5407,26 @@
       : '';
 
     let doneBanner = '';
-    if (done) {
+    if (locked) {
+      doneBanner = '<div class="checkin-done-banner locked">🔒 Complete Check-in ' + (step - 1) + ' first.</div>';
+    } else if (done) {
       const label = reached
         ? 'Check-in complete — you reached them.'
         : 'Marked complete after 3 no-answers.';
       doneBanner = '<div class="checkin-done-banner">✓ ' + esc(label) + '</div>';
     }
 
-    const statusBadge = done
-      ? '<span class="checkin-status done">Done</span>'
-      : attempts.length > 0
-        ? '<span class="checkin-status in-progress">In progress · ' + attempts.length + '/3</span>'
-        : '<span class="checkin-status pending">Pending</span>';
+    const statusBadge = locked
+      ? '<span class="checkin-status locked">Locked</span>'
+      : done
+        ? '<span class="checkin-status done">Done</span>'
+        : attempts.length > 0
+          ? '<span class="checkin-status in-progress">In progress · ' + attempts.length + '/3</span>'
+          : '<span class="checkin-status pending">Pending</span>';
 
-    return '<div class="checkin-card ' + (done ? 'is-done' : 'is-open') + '" data-checkin-step="' + step + '">' +
+    const cardClass = locked ? 'is-locked' : (done ? 'is-done' : 'is-open');
+
+    return '<div class="checkin-card ' + cardClass + '" data-checkin-step="' + step + '">' +
       '<div class="checkin-head">' +
         '<div class="checkin-name">Check-in ' + step + '</div>' + statusBadge +
       '</div>' +
