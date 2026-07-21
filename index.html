@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260720T205244">
+<meta name="hc-build-id" content="20260720T212056">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -235,6 +235,9 @@
     margin: 0 24px 8px; font-size: 12px; color: var(--text-muted);
   }
   .roster-table-wrap { padding: 4px 24px 16px; overflow-x: auto; }
+  .roster-cards-wrap { padding: 4px 24px 16px; }
+  .roster-cards-wrap .card { cursor: pointer; }
+  .roster-cards-wrap .card:hover { box-shadow: 0 2px 8px rgba(23,30,38,0.06); }
   .roster-table {
     width: 100%; border-collapse: separate; border-spacing: 0;
     background: #fff; border: 1px solid var(--border); border-radius: 8px;
@@ -5210,49 +5213,100 @@
       '</tr>';
     };
 
-    // New Convert row — 10-stage pipeline dots + click opens the
-    // 10-stage detail panel (openPanel). Halee/Jaylee move them through
-    // stages 1-10; graduation to Established happens automatically once
-    // they hit stage 10 (second check-in done).
-    const newConvertRowHtml = function(c){
-      const rate = c.rate ? '$' + Number(c.rate).toFixed(0) : '—';
-      const frv = c.first_rec_visit ? fmtDateShort(c.first_rec_visit) : '—';
-      const tenure = tenureLabel(tenureDaysOf(c));
+    // Pill renderer — matches Python _render_pill (build_pipeline_artifact.py)
+    // Kept in sync manually so the New Convert cards look identical to the
+    // Pipeline tab's cards. States: done / current / upcoming (+ lost variants).
+    const renderPipelinePill = function(stageNum, stageLabel, state, isLost) {
+      let cls, icon, title;
+      if (isLost && stageNum === 6) {
+        cls = 'pill pill-lost';
+        icon = '<span class="pill-icon">✕</span>';
+        title = 'Stage ' + stageNum + ': ' + stageLabel + ' — Lost';
+      } else if (isLost && stageNum > 6) {
+        cls = 'pill pill-lost-past';
+        icon = '';
+        title = 'Stage ' + stageNum + ': ' + stageLabel + ' — (Lost)';
+      } else if (state === 'done') {
+        cls = 'pill pill-done';
+        icon = '<span class="pill-icon">✓</span>';
+        title = 'Stage ' + stageNum + ': ' + stageLabel + ' — done';
+      } else if (state === 'current') {
+        cls = 'pill pill-current';
+        icon = '<span class="pill-icon pulse"></span>';
+        title = 'Stage ' + stageNum + ': ' + stageLabel + ' — current';
+      } else {
+        cls = 'pill pill-upcoming';
+        icon = '';
+        title = 'Stage ' + stageNum + ': ' + stageLabel + ' — upcoming';
+      }
+      return '<div class="' + cls + '" title="' + esc(title) + '">' +
+        icon +
+        '<span class="pill-num">' + stageNum + '</span>' +
+        '<span class="pill-label">' + esc(stageLabel) + '</span>' +
+      '</div>';
+    };
+
+    // Card renderer — same shape as _render_customer_card so the New Convert
+    // section on the Roster tab looks IDENTICAL to Pipeline tab cards.
+    const renderNewConvertCard = function(c){
       const ps = c.pipeline_stage || {};
       const stages = ps.stages || {};
       const isLost = !!ps.lost || ps.current_stage === 'Lost';
-      const currentN = typeof ps.current_stage === 'number' ? ps.current_stage : null;
-      const currentLabel = currentN
-        ? 'Stage ' + currentN + ' · ' + (
-            currentN === 1 ? 'Booked' :
-            currentN === 2 ? 'Onboarding call' :
-            currentN === 3 ? 'First clean done' :
-            currentN === 4 ? 'Seed planted' :
-            currentN === 5 ? 'Recurring pitch' :
-            currentN === 6 ? 'Won recurring' :
-            currentN === 7 ? 'First recurring visit' :
-            currentN === 8 ? 'First check-in' :
-            currentN === 9 ? 'Second check-in' :
-            'Retained')
-        : (isLost ? 'Lost' : '—');
-      // 10 compact stage dots.
-      const dots = [1,2,3,4,5,6,7,8,9,10].map(function(n){
-        const state = stages[n] || 'upcoming';
-        return '<span class="stage-dot ' + esc(state) + (isLost && n >= currentN ? ' lost' : '') + '" title="Stage ' + n + '"></span>';
+      const isRec = !!c.is_recurring;
+      const freq = c.frequency;
+      const state = c.state;
+      let cleaner = '';
+      if (Array.isArray(c.first_visit_cleaners)) {
+        cleaner = c.first_visit_cleaners.filter(Boolean).join(', ');
+      } else if (c.first_visit_cleaners) {
+        cleaner = String(c.first_visit_cleaners);
+      }
+      const last = c.last_visit ? fmtDateShort(c.last_visit) : '—';
+      const nextSched = c.next_scheduled ? fmtDateShort(c.next_scheduled) : '—';
+      const ltv = (typeof c.ltv === 'number' && c.ltv > 0) ? '$' + Math.round(c.ltv).toLocaleString() : '—';
+
+      // Meta: recurring → frequency; else → state; + grandfathered / cleaner bits.
+      const metaBits = [];
+      if (isRec && freq) metaBits.push(esc(freq));
+      else if (state)    metaBits.push(esc(state));
+      if (c.established) metaBits.push('<span class="tag tag-est">grandfathered</span>');
+      if (cleaner)       metaBits.push('cleaner: ' + esc(cleaner));
+      const meta = metaBits.join(' · ');
+
+      // Timeline + owner tag (matches Python).
+      const timeline =
+        '<span class="tl-item">last ' + esc(last) + '</span>' +
+        '<span class="tl-sep">·</span>' +
+        '<span class="tl-item">next ' + esc(nextSched) + '</span>' +
+        '<span class="tl-sep">·</span>' +
+        '<span class="tl-item">LTV ' + esc(ltv) + '</span>';
+
+      const cur = ps.current_stage;
+      const owner = ps.next_action_owner || 'auto';
+      let ownerTag;
+      if (cur === 'Lost')            ownerTag = '<span class="owner-tag owner-lost">LOST · Jaylee</span>';
+      else if (cur === 8 || cur === 9) ownerTag = '<span class="owner-tag owner-halee">Halee · check-in</span>';
+      else if (cur === 10)           ownerTag = '<span class="owner-tag owner-auto">Retained</span>';
+      else if (owner === 'jaylee')   ownerTag = '<span class="owner-tag owner-jaylee">Jaylee · action</span>';
+      else if (owner === 'cleaner')  ownerTag = '<span class="owner-tag owner-cleaner">Cleaner · action</span>';
+      else                           ownerTag = '<span class="owner-tag owner-auto">Automatic</span>';
+
+      const pipelineHtml = STAGE_META.map(function(m){
+        return renderPipelinePill(m.n, m.label, stages[m.n] || 'upcoming', isLost);
       }).join('');
-      return '<tr class="roster-row" data-open-cid="' + esc(c.customer_id) + '" data-roster-kind="new-convert">' +
-        '<td><a href="#" onclick="event.preventDefault()"><strong>' + esc(c.display_name || '') + '</strong></a></td>' +
-        '<td>' + esc(c.frequency || '—') + '</td>' +
-        '<td class="right">' + esc(rate) + '</td>' +
-        '<td>' + esc(frv) + '</td>' +
-        '<td>' + esc(tenure) + '</td>' +
-        '<td>' +
-          '<div class="new-convert-stage-cell">' +
-            '<div class="new-convert-stage-label">' + esc(currentLabel) + '</div>' +
-            '<div class="new-convert-stage-dots">' + dots + '</div>' +
-          '</div>' +
-        '</td>' +
-      '</tr>';
+
+      return '<div class="card" role="button" tabindex="0" ' +
+             'data-customer-id="' + esc(c.customer_id) + '" ' +
+             'data-roster-kind="new-convert">' +
+        '<div class="card-header">' +
+          '<div class="card-name">' + esc(c.display_name || 'Unknown') + '</div>' +
+          '<div class="card-meta">' + meta + '</div>' +
+        '</div>' +
+        '<div class="card-timeline">' + timeline + ' ' + ownerTag + '</div>' +
+        '<div class="pipeline-scroll">' +
+          '<div class="pipeline-row">' + pipelineHtml + '</div>' +
+        '</div>' +
+      '</div>';
     };
 
     const tableHtml = function(rowsIn, emptyMsg, rowFn, lastColHead) {
@@ -5291,16 +5345,17 @@
 
       '<h3 class="roster-section-head">New Converts <span class="tab-count">' + newConverts.length + '</span></h3>' +
       '<div class="roster-section-help">' +
-        'First recurring clean still upcoming. They flow through the 10-step pipeline (Jaylee: stages 1-6, Halee: stages 7-10). Once they hit Retained (stage 10), they graduate to Established below. Click a row to open the 10-stage detail panel.' +
+        'Had (or scheduled) a first clean, not yet on the recurring roster. They flow through the 10-step pipeline (Jaylee: stages 1-6, Halee: stages 7-10). Click a card to open the 10-stage detail panel. Once they hit Retained (stage 10), they graduate to Established below with Check-in 1 auto-marked.' +
       '</div>' +
-      tableHtml(
-        newConverts,
-        (filter
-          ? 'No new converts match your filter.'
-          : 'No new converts right now. When Jaylee marks someone as Won and their first recurring visit is in the future, they land here.'),
-        newConvertRowHtml,
-        'Pipeline stage'
-      ) +
+      '<div class="roster-cards-wrap">' +
+        (newConverts.length
+          ? newConverts.map(renderNewConvertCard).join('')
+          : '<div class="group-empty" style="margin:8px 24px 16px">' +
+              esc(filter
+                ? 'No new converts match your filter.'
+                : 'No new converts right now. When Jaylee marks someone as Won and their first recurring visit is in the future, they land here.') +
+            '</div>') +
+      '</div>' +
 
       '<h3 class="roster-section-head">Established <span class="tab-count">' + established.length + '</span></h3>' +
       '<div class="roster-section-help">' +
