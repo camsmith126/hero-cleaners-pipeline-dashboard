@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260720T183205">
+<meta name="hc-build-id" content="20260720T183754">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -255,6 +255,85 @@
   .roster-box:hover { background: #F3F4F6; }
   .roster-box.done {
     background: #059669; border-color: #059669; color: #fff;
+  }
+
+  /* Roster check-in panel (2026-07-19) */
+  .roster-panel-intro {
+    padding: 12px 16px; margin-bottom: 12px;
+    background: #F9FAFB; border-left: 3px solid var(--slate);
+    color: var(--text-muted); font-size: 12px; border-radius: 4px;
+  }
+  .checkin-card {
+    border: 1px solid var(--border); border-radius: 8px;
+    background: #fff; margin-bottom: 12px; overflow: hidden;
+  }
+  .checkin-card.is-done { opacity: 0.75; }
+  .checkin-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; background: #F9FAFB;
+    border-bottom: 1px solid var(--border);
+  }
+  .checkin-name {
+    font-family: Georgia, serif; font-size: 16px; font-weight: 700;
+    color: var(--hero-black);
+  }
+  .checkin-status {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+    padding: 3px 10px; border-radius: 999px; font-weight: 700;
+  }
+  .checkin-status.done         { background: #DCFCE7; color: #059669; }
+  .checkin-status.in-progress  { background: #FEF3C7; color: #B45309; }
+  .checkin-status.pending      { background: #E4E7EB; color: var(--text-muted); }
+  .checkin-attempts {
+    padding: 10px 16px; display: flex; flex-direction: column; gap: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .checkin-attempt.done {
+    background: #F9FAFB; padding: 8px 10px; border-radius: 4px;
+    font-size: 12px; display: grid;
+    grid-template-columns: auto 1fr auto; column-gap: 10px; row-gap: 6px;
+  }
+  .checkin-attempt .ca-n { font-weight: 700; }
+  .checkin-attempt .ca-r { color: var(--slate); }
+  .checkin-attempt .ca-when { color: var(--text-muted); }
+  .checkin-attempt .ca-notes {
+    grid-column: 1 / -1; color: var(--hero-black);
+    font-size: 12px; padding-top: 4px; border-top: 1px dashed var(--border);
+  }
+  .checkin-done-banner {
+    padding: 10px 16px; background: #ECFDF5;
+    color: #065F46; font-size: 12px; font-weight: 600;
+    border-bottom: 1px solid var(--border);
+  }
+  .checkin-done-banner.warn { background: #FEF3C7; color: #78350F; }
+  .checkin-active {
+    padding: 12px 16px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .checkin-active .ca-label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--text-muted); font-weight: 700;
+  }
+  .checkin-active .ca-controls {
+    display: flex; gap: 8px;
+  }
+  .checkin-active .ca-btn {
+    padding: 8px 14px; border: 1px solid var(--border);
+    background: #fff; border-radius: 4px; cursor: pointer;
+    font-family: inherit; font-size: 13px; font-weight: 600;
+    color: var(--hero-black);
+  }
+  .checkin-active .ca-btn:hover { background: #F3F4F6; }
+  .checkin-active .ca-btn:first-child:hover { background: #D1FAE5; border-color: #059669; }
+  .checkin-active .ca-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .checkin-active .ca-notes-input {
+    width: 100%; min-height: 60px; padding: 8px 10px;
+    border: 1px solid var(--border); border-radius: 4px;
+    font-family: inherit; font-size: 13px; resize: vertical;
+    box-sizing: border-box;
+  }
+  .checkin-active .ca-notes-input:focus {
+    outline: 2px solid var(--hero-red); outline-offset: -1px;
   }
 
   /* 2026-07-19: Customers tab (data view) */
@@ -4965,12 +5044,21 @@
       });
     }
 
-    // Row click opens the detail panel (Phase 3 will swap this for the
-    // dedicated 4-check-in side panel).
-    container.querySelectorAll('[data-open-cid]').forEach(function(el){
-      el.addEventListener('click', function(ev){
+    // Row click opens the dedicated 4-check-in side panel.
+    // A specific check-in-box click opens with focus on that step.
+    container.querySelectorAll('.roster-box').forEach(function(box){
+      box.addEventListener('click', function(ev){
         ev.stopPropagation();
-        openPanel(el.getAttribute('data-open-cid'));
+        const cid = box.getAttribute('data-cid');
+        const step = parseInt(box.getAttribute('data-roster-checkin'), 10);
+        openRosterPanel(cid, step);
+      });
+    });
+    container.querySelectorAll('.roster-row').forEach(function(row){
+      row.addEventListener('click', function(ev){
+        // If the click was on a box (or its child), let the box handler run
+        if (ev.target.closest('.roster-box')) return;
+        openRosterPanel(row.getAttribute('data-open-cid'));
       });
     });
   }
@@ -5093,7 +5181,7 @@
   function openPanel(customer_id) {
     const c = CUST_BY_ID[customer_id];
     if (!c) return;
-    CURRENT = {customer: c, formStage: null, values: {}, saving: false};
+    CURRENT = {customer: c, formStage: null, values: {}, saving: false, mode: 'detail'};
     renderPanel();
     scrim.classList.add('open');
     panel.classList.add('open');
@@ -5101,12 +5189,194 @@
     scrim.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
   }
+
+  // 2026-07-19: Roster check-in panel. Same slide-in shell as openPanel
+  // but renders 4 check-in cards instead of the pipeline stage cards.
+  function openRosterPanel(customer_id, focusStep) {
+    const c = CUST_BY_ID[customer_id];
+    if (!c) return;
+    CURRENT = {customer: c, formStage: null, values: {}, saving: false, mode: 'roster', focusStep: focusStep || null};
+    renderRosterPanel();
+    scrim.classList.add('open');
+    panel.classList.add('open');
+    panel.setAttribute('aria-hidden', 'false');
+    scrim.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+  }
+
+  // Return the list of attempts already logged for a given check-in step.
+  // Newest first. Reads from customer.pipeline_actions.
+  function rosterAttemptsFor(c, step) {
+    const target = 'roster_check_in_' + step;
+    return (c.pipeline_actions || [])
+      .filter(function(a){ return a.stage_name === target; })
+      .sort(function(a, b){ return (a.logged_at || '').localeCompare(b.logged_at || ''); });
+  }
+  // Check-in step "done" = any attempt reached OR 3 attempts logged.
+  function isCheckinDone(c, step) {
+    const attempts = rosterAttemptsFor(c, step);
+    if (attempts.some(function(a){ return a.event_data && a.event_data.answered === true; })) return true;
+    if (attempts.length >= 3) return true;
+    return false;
+  }
+
+  function renderRosterPanel() {
+    const c = CURRENT.customer;
+    titleEl.textContent = c.display_name || 'Customer';
+    const bits = [];
+    if (c.frequency) bits.push(c.frequency);
+    if (c.rate)      bits.push('$' + Number(c.rate).toFixed(0) + '/clean');
+    const tenure = tenureLabel(tenureDaysOf(c));
+    if (tenure && tenure !== '—') bits.push(tenure + ' recurring');
+    metaEl.textContent = bits.join(' · ');
+    // Hide the global save button — each check-in card has its own.
+    if (saveBtn) saveBtn.style.display = 'none';
+
+    const cards = [1,2,3,4].map(function(step){ return renderCheckinCard(c, step); }).join('');
+    bodyEl.innerHTML =
+      '<div class="roster-panel-intro">' +
+        'Halee\'s 4 check-ins. Each has up to 3 attempts (like Jaylee\'s recurring pitch). ' +
+        'Log the conversation summary once you reach them.' +
+      '</div>' +
+      cards;
+
+    wireRosterPanel();
+
+    // Optional: scroll to the focused step if opened via a check-in box click.
+    if (CURRENT.focusStep) {
+      const el = bodyEl.querySelector('[data-checkin-step="' + CURRENT.focusStep + '"]');
+      if (el) el.scrollIntoView({block: 'start', behavior: 'smooth'});
+    }
+  }
+
+  function renderCheckinCard(c, step) {
+    const attempts = rosterAttemptsFor(c, step);
+    const done = isCheckinDone(c, step);
+    const reached = attempts.find(function(a){ return a.event_data && a.event_data.answered === true; });
+    const nextAttemptN = attempts.length + 1;
+    const attemptsExhausted = attempts.length >= 3;
+    const canLogMore = !done && !attemptsExhausted;
+
+    const priorRows = attempts.map(function(a, i){
+      const ans = a.event_data && a.event_data.answered;
+      const label = ans ? 'Reached' : 'No answer';
+      const notes = (a.event_data && a.event_data.notes) || '';
+      const when = a.logged_at ? fmtDateShort(a.logged_at.slice(0,10)) : '';
+      return '<div class="checkin-attempt done">' +
+        '<span class="ca-n">Attempt ' + (i + 1) + '</span>' +
+        '<span class="ca-r">' + (ans ? '✓ ' : '✗ ') + esc(label) + '</span>' +
+        '<span class="ca-when">' + esc(when) + '</span>' +
+        (notes ? '<div class="ca-notes">' + esc(notes) + '</div>' : '') +
+      '</div>';
+    }).join('');
+
+    let activeBlock = '';
+    if (canLogMore) {
+      activeBlock =
+        '<div class="checkin-active" data-checkin-active="' + step + '">' +
+          '<div class="ca-label">Attempt ' + nextAttemptN + '</div>' +
+          '<div class="ca-controls">' +
+            '<button type="button" class="ca-btn" data-answered="true"  data-step="' + step + '">Reached them</button>' +
+            '<button type="button" class="ca-btn" data-answered="false" data-step="' + step + '">No answer</button>' +
+          '</div>' +
+          '<textarea class="ca-notes-input" data-notes-for="' + step + '" placeholder="Conversation summary — captured when you mark Reached."></textarea>' +
+        '</div>';
+    }
+
+    let doneBanner = '';
+    if (done) {
+      const label = reached ? 'Reached · check-in complete' : 'Marked complete after 3 no-answers';
+      doneBanner = '<div class="checkin-done-banner">✓ ' + esc(label) + '</div>';
+    } else if (attemptsExhausted) {
+      doneBanner = '<div class="checkin-done-banner warn">3 attempts logged — mark this check-in closed via any Reached attempt or leave open for now.</div>';
+    }
+
+    const statusBadge = done
+      ? '<span class="checkin-status done">Done</span>'
+      : attempts.length > 0
+        ? '<span class="checkin-status in-progress">In progress · ' + attempts.length + '/3</span>'
+        : '<span class="checkin-status pending">Pending</span>';
+
+    return '<div class="checkin-card ' + (done ? 'is-done' : 'is-open') + '" data-checkin-step="' + step + '">' +
+      '<div class="checkin-head">' +
+        '<div class="checkin-name">Check-in ' + step + '</div>' + statusBadge +
+      '</div>' +
+      (priorRows ? '<div class="checkin-attempts">' + priorRows + '</div>' : '') +
+      doneBanner +
+      activeBlock +
+    '</div>';
+  }
+
+  function wireRosterPanel() {
+    // Attempt button click → log via Supabase, then re-render.
+    bodyEl.querySelectorAll('.ca-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        if (!requireIdentity()) return;
+        const step = parseInt(btn.getAttribute('data-step'), 10);
+        const answered = btn.getAttribute('data-answered') === 'true';
+        const notesEl = bodyEl.querySelector('[data-notes-for="' + step + '"]');
+        const notes = (notesEl && notesEl.value) ? notesEl.value.trim() : '';
+        if (answered && !notes) {
+          toast('Add conversation notes before saving a Reached attempt.', true);
+          if (notesEl) notesEl.focus();
+          return;
+        }
+        saveRosterAttempt(step, answered, notes, btn);
+      });
+    });
+  }
+
+  async function saveRosterAttempt(step, answered, notes, btnEl) {
+    const c = CURRENT.customer;
+    const prevText = btnEl.textContent;
+    btnEl.disabled = true;
+    btnEl.textContent = 'Saving…';
+    try {
+      const attemptCountBefore = rosterAttemptsFor(c, step).length;
+      const eventData = {
+        step: step,
+        attempt_number: attemptCountBefore + 1,
+        answered: answered,
+        notes: notes || null,
+      };
+      await sb('customer_actions', {
+        method: 'POST',
+        body: JSON.stringify({
+          customer_id: c.customer_id,
+          stage_name:  'roster_check_in_' + step,
+          event_data:  eventData,
+          logged_by:   loggedBy(),
+        }),
+      });
+      // Optimistic local update so the panel + table reflect the change
+      // immediately (avoids waiting for the daily-run mirror).
+      if (!c.pipeline_actions) c.pipeline_actions = [];
+      c.pipeline_actions.push({
+        stage_name: 'roster_check_in_' + step,
+        event_data: eventData,
+        logged_at:  new Date().toISOString(),
+      });
+      toast('Saved. Check-in ' + step + ' · attempt ' + eventData.attempt_number + ' — ' +
+            (answered ? 'reached.' : 'no answer.'));
+      renderRosterPanel();
+      // Refresh the roster table under the panel so boxes update.
+      const container = document.getElementById('tabPanelRoster');
+      if (container && !container.hidden) renderRosterTab(container);
+    } catch (err) {
+      console.error(err);
+      toast('Save failed — ' + err.message, true);
+      btnEl.disabled = false;
+      btnEl.textContent = prevText;
+    }
+  }
   function closePanel() {
     scrim.classList.remove('open');
     panel.classList.remove('open');
     panel.setAttribute('aria-hidden', 'true');
     scrim.setAttribute('aria-hidden', 'true');
     document.body.style.overflow = '';
+    // Restore the global save button in case roster mode hid it.
+    if (saveBtn) saveBtn.style.display = '';
     CURRENT = null;
   }
   scrim.addEventListener('click', closePanel);
