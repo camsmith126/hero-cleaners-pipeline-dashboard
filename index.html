@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260720T221107">
+<meta name="hc-build-id" content="20260720T221510">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -6563,11 +6563,10 @@
           : '') +
       '</div>';
 
-    // Questions unlock once we know we\'ve got info to give: met in person,
-    // or an attempt reached them. Otherwise hidden — they\'d be premature.
-    const questionsUnlocked = (met === 'true' || anyReached);
+    // 2026-07-20 (Cam): always show the question stack — fill in what you have,
+    // save gating still requires vibe/cleaner/freq/time before close-out.
     const questionsBlock =
-      '<div id="s8_questions_block_' + esc(c.customer_id) + '" data-s8-block="questions" style="display:' + (questionsUnlocked ? '' : 'none') + '">' +
+      '<div id="s8_questions_block_' + esc(c.customer_id) + '" data-s8-block="questions">' +
         '<div class="stage-field-row"><span class="field-label">Vibe</span><span class="field-value">' +
           segmented('__s8_vibe', [['straightforward','Straightforward'],['friendly','Friendly'],['reserved','Reserved']], vibe) +
         '</span></div>' +
@@ -6607,26 +6606,15 @@
     };
   }
 
-  // Toggle Stage 8\'s attempts/questions blocks based on the Met-in-person
-  // pick + whether an attempt has just reached them.
+  // Toggle Stage 8\'s attempts block based on the Met-in-person pick.
+  // Questions block is always visible now (Cam 2026-07-20) — save gating
+  // in saveStage(8) still requires vibe/cleaner/freq/time before close-out.
   function refreshStage8Blocks() {
     const met = readStageField(8, 'met_in_person');
-    const attAnswered = readStageField(8, 'att_answered');
-    const anyPriorReached = (function(){
-      const c = CURRENT && CURRENT.customer;
-      if (!c) return false;
-      return (c.pipeline_actions || []).some(function(a){
-        return (a.stage_name || '').indexOf('first_check_in_attempt_') === 0
-            && a.event_data && a.event_data.answered === true;
-      });
-    })();
-    const anyReached = anyPriorReached || (attAnswered === 'true');
     const bd = bodyEl.querySelector('[data-stage-body="8"]');
     if (!bd) return;
-    const attemptsBlock  = bd.querySelector('[data-s8-block="attempts"]');
-    const questionsBlock = bd.querySelector('[data-s8-block="questions"]');
-    if (attemptsBlock)  attemptsBlock.style.display  = (met === 'true') ? 'none' : '';
-    if (questionsBlock) questionsBlock.style.display = (met === 'true' || anyReached) ? '' : 'none';
+    const attemptsBlock = bd.querySelector('[data-s8-block="attempts"]');
+    if (attemptsBlock) attemptsBlock.style.display = (met === 'true') ? 'none' : '';
   }
 
   // ---- Stage 9: second_check_in — writes to customer_actions
