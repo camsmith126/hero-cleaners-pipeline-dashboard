@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260720T215712">
+<meta name="hc-build-id" content="20260720T220902">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -6001,6 +6001,7 @@
         bits.push('Reached: ' + esc(via));
       }
       if (d.vibe) bits.push('Vibe: <strong>' + esc(d.vibe) + '</strong>');
+      if (d.cleaner_fit) bits.push('Cleaner fit: <strong>' + esc({'great':'great fit','fine':'fine','concerns':'concerns'}[d.cleaner_fit] || d.cleaner_fit) + '</strong>');
       if (d.frequency_check) bits.push('Frequency: ' + esc({'more':'wants more frequent','right':'current cadence works','less':'would like less'}[d.frequency_check] || d.frequency_check));
       if (d.time_check)      bits.push('Time per clean: ' + esc({'more':'wants more time','right':'current is right','less':'could use less'}[d.time_check] || d.time_check));
       // Legacy fields (from pre-rewrite rows) — still surface so old logs read fine.
@@ -6508,7 +6509,24 @@
     const vibe = d.vibe || '';
     const freq = d.frequency_check || '';
     const timeCheck = d.time_check || '';
+    const cleanerFit = d.cleaner_fit || '';
     const notes = d.notes || '';
+
+    // Personalize the cleaner-fit label with the assigned cleaner\'s name
+    // when we have it. Falls back to a generic label for grandfathered /
+    // migrated customers where first_visit_cleaners is empty.
+    const cleanerName = (function(){
+      if (Array.isArray(c.first_visit_cleaners)) {
+        const names = c.first_visit_cleaners.filter(Boolean);
+        if (names.length) return names.join(' & ');
+      } else if (c.first_visit_cleaners) {
+        return String(c.first_visit_cleaners);
+      }
+      return '';
+    })();
+    const cleanerFitLabel = cleanerName
+      ? ('How does she feel about ' + cleanerName + '?')
+      : 'How does she feel about the cleaner?';
 
     const anyReached = attempts.some(function(a){ return a.answered; });
     const nextAttempt = Math.min(attempts.length + 1, 3);
@@ -6551,9 +6569,13 @@
     const questionsBlock =
       '<div id="s8_questions_block_' + esc(c.customer_id) + '" data-s8-block="questions" style="display:' + (questionsUnlocked ? '' : 'none') + '">' +
         '<div class="stage-field-row"><span class="field-label">Vibe</span><span class="field-value">' +
-          segmented('__s8_vibe', [['warm','Warm'],['friendly','Friendly'],['reserved','Reserved'],['cool','Cool']], vibe) +
+          segmented('__s8_vibe', [['straightforward','Straightforward'],['friendly','Friendly'],['reserved','Reserved']], vibe) +
         '</span></div>' +
         '<div class="stage-hint" style="margin-top:-4px">How they engaged — helps shape how we serve them.</div>' +
+        '<div class="stage-field-row"><span class="field-label">' + esc(cleanerFitLabel) + '</span><span class="field-value">' +
+          segmented('__s8_cleaner', [['great','Great fit'],['fine','Fine'],['concerns','Concerns']], cleanerFit) +
+        '</span></div>' +
+        '<div class="stage-hint" style="margin-top:-4px">Great fit = wants them specifically. Concerns = mentioned issues; capture details in Notes below.</div>' +
         '<div class="stage-field-row"><span class="field-label">Frequency check</span><span class="field-value">' +
           segmented('__s8_freq', [['more','Wants more frequent'],['right','Current cadence works'],['less','Would like less frequent']], freq) +
         '</span></div>' +
@@ -6577,6 +6599,7 @@
         // Hidden mirrors — saveStage(8) reads from these.
         '<input type="hidden" data-stage-field="8" data-field="met_in_person" value="' + esc(met) + '"/>' +
         '<input type="hidden" data-stage-field="8" data-field="vibe" value="' + esc(vibe) + '"/>' +
+        '<input type="hidden" data-stage-field="8" data-field="cleaner_fit" value="' + esc(cleanerFit) + '"/>' +
         '<input type="hidden" data-stage-field="8" data-field="frequency_check" value="' + esc(freq) + '"/>' +
         '<input type="hidden" data-stage-field="8" data-field="time_check" value="' + esc(timeCheck) + '"/>' +
         '<input type="hidden" data-stage-field="8" data-field="att_answered" value=""/>' +
@@ -7069,6 +7092,7 @@
       '__s8_met_in_person':{stage: 8, field: 'met_in_person',        type: 'bool'},
       '__s8_att_answered': {stage: 8, field: 'att_answered',         type: 'bool'},
       '__s8_vibe':         {stage: 8, field: 'vibe',                 type: 'str'},
+      '__s8_cleaner':      {stage: 8, field: 'cleaner_fit',          type: 'str'},
       '__s8_freq':         {stage: 8, field: 'frequency_check',      type: 'str'},
       '__s8_time':         {stage: 8, field: 'time_check',           type: 'str'},
       '__s9_contact':      {stage: 9, field: 'contact_method',       type: 'str'},
@@ -7455,6 +7479,7 @@
         const attAnswered = readBool('att_answered');    // true | false | null
         const attNumber   = parseInt(read('att_number') || '1', 10);
         const vibe        = read('vibe');
+        const cleanerFit  = read('cleaner_fit');
         const freq        = read('frequency_check');
         const timeCheck   = read('time_check');
         const notes       = read('notes');
@@ -7467,7 +7492,7 @@
         });
         const attemptsClosed = priorAttempts.length >= 3;
         const anyReached = anyPriorReached || (attAnswered === true);
-        const hasQuestions = !!(vibe && freq && timeCheck);
+        const hasQuestions = !!(vibe && cleanerFit && freq && timeCheck);
         const closingUnreached = attemptsClosed && !anyReached;
 
         // Decide branches.
@@ -7480,11 +7505,11 @@
           if (met === null) {
             toast('Pick whether you met the customer in person first.', true);
           } else if (met === true && !hasQuestions) {
-            toast('Pick Vibe, Frequency check, and Time per clean to close out.', true);
+            toast('Pick Vibe, Cleaner fit, Frequency check, and Time per clean to close out.', true);
           } else if (met === false && attAnswered === null && !anyPriorReached && !attemptsClosed) {
             toast('Log an attempt (Reached / No answer) or switch Met in person to Yes.', true);
           } else {
-            toast('Fill Vibe, Frequency check, and Time per clean to close the check-in.', true);
+            toast('Fill Vibe, Cleaner fit, Frequency check, and Time per clean to close the check-in.', true);
           }
           throw new Error('nothing to save on stage 8');
         }
@@ -7514,6 +7539,7 @@
           const eventData = {
             met_in_person:   met,
             vibe:            hasQuestions ? vibe : null,
+            cleaner_fit:     hasQuestions ? cleanerFit : null,
             frequency_check: hasQuestions ? freq : null,
             time_check:      hasQuestions ? timeCheck : null,
             reached_via:     reachedVia,
