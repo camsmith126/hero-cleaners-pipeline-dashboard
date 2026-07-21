@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260721T115301">
+<meta name="hc-build-id" content="20260721T120942">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -658,6 +658,12 @@
   .cal-chip.newjob      { background: #0891B2; }   /* teal — any new-customer first clean */
   .cal-chip.newjob-move { background: #EA580C; }   /* orange — Move In/Out */
   .cal-chip.info   { background: #E4E7EB; color: var(--text-muted); }
+  /* 2026-07-21: New Customers tab — semantic chip colors so Jaylee can
+     read her calendar at a glance. Onboarding calls always red (action
+     today), pitch preview amber (heads-up), pitch active dark purple. */
+  .cal-chip.onboarding    { background: #DC2626; }   /* red — call today */
+  .cal-chip.pitch-preview { background: #D97706; }   /* amber — pitch tomorrow */
+  .cal-chip.pitch-active  { background: #6D28D9; }   /* deep purple — pitch due */
   .cal-chip:hover { opacity: 0.85; }
   /* Group list rows (categorized customer lists) */
   .group-row {
@@ -2399,25 +2405,51 @@
       const d = new Date(wkStart); d.setDate(d.getDate() + i); return d;
     });
 
-    // Bucket by day. Each customer contributes:
-    //   1. their current-stage action chip (actionDueDate — S2 onboarding
-    //      call, S5 pitch attempt, S1/3/4 first-clean informational, S7
-    //      first-recurring)
-    //   2. a preview pitch chip on day-after-first-clean if they\'re at
-    //      stages 1-4 (Cam wants to see tomorrow\'s pitch before the
-    //      customer has advanced to S5 — so Jaylee can plan the day).
-    // Chip entries are objects: {customer, kind: 'action'|'pitch'}.
+    // 2026-07-21 (Cam): each customer emits up to 4 semantically-typed chips:
+    //   • onboarding   — Stage 2 customer, always on TODAY (recurring daily
+    //                    task until Jaylee logs the call). Red.
+    //   • clean        — Stage 1/2/3 customer\'s scheduled first clean. Teal
+    //                    (or orange for Move In/Out).
+    //   • pitch-preview— Stage 1-4 customer, day-after-first-clean. Amber.
+    //   • pitch-active — Stage 5 customer, actionDueDate. Deep purple.
+    //   • first-recurring — Stage 7 customer, first_rec_visit. (Rare on this
+    //                    tab now — most Stage 7s already excluded by isNewConvert.)
+    // Chip entries are objects: {c, kind}.
     const byDay = days.map(function(){ return []; });
+    const inWindow = function(d){ return d && d >= wkStart && d <= windowEnd; };
+    const pushChip = function(d, entry){
+      if (!inWindow(d)) return;
+      byDay[daysBetween(d, wkStart)].push(entry);
+    };
+
     custs.forEach(function(c){
-      const due = actionDueDate(c);
-      if (due && due >= wkStart && due <= windowEnd) {
-        const idx = daysBetween(due, wkStart);
-        byDay[idx].push({c: c, kind: 'action'});
+      const cs = (c.pipeline_stage || {}).current_stage;
+      const cleanDate = parseIsoDate(c.next_scheduled) || parseIsoDate(c.first_visit);
+
+      // Onboarding-call task chip — persists on TODAY while Stage 2.
+      if (cs === 2) pushChip(today, {c: c, kind: 'onboarding'});
+
+      // First-clean chip — on the actual scheduled clean date.
+      if (cs === 1 || cs === 2 || cs === 3) pushChip(cleanDate, {c: c, kind: 'clean'});
+
+      // Recurring-pitch preview chip — day-after-first-clean for Stages 1-4.
+      // Stage 5 gets the ACTIVE pitch chip (below) via actionDueDate instead.
+      if (cs >= 1 && cs <= 4 && cleanDate) {
+        const p = new Date(cleanDate); p.setDate(p.getDate() + 1);
+        pushChip(rollSundayForward(p), {c: c, kind: 'pitch-preview'});
       }
-      const pitchDate = previewPitchDate(c);
-      if (pitchDate && pitchDate >= wkStart && pitchDate <= windowEnd) {
-        const idx = daysBetween(pitchDate, wkStart);
-        byDay[idx].push({c: c, kind: 'pitch'});
+
+      // Active pitch chip — Stage 5, on actionDueDate (day-after-clean or
+      // day-after-last-attempt).
+      if (cs === 5) {
+        const p = actionDueDate(c);
+        pushChip(p, {c: c, kind: 'pitch-active'});
+      }
+
+      // First-recurring chip — Stage 7.
+      if (cs === 7) {
+        const frv = parseIsoDate(c.first_rec_visit) || parseIsoDate(c.next_scheduled);
+        pushChip(frv, {c: c, kind: 'first-recurring'});
       }
     });
 
@@ -2437,17 +2469,26 @@
         const isPast = !isToday && d < today;
         const chips = byDay[dayIdx].map(function(entry){
           const c = entry.c;
-          const cs = (c.pipeline_stage || {}).current_stage;
-          let kind, chipLabel;
-          if (entry.kind === 'pitch') {
-            // Preview pitch chip — always styled as a phone-call action.
-            kind = isToday ? 'urgent' : 'call';
-            chipLabel = 'Recurring pitch · ' + (c.display_name || 'customer').split(' ')[0];
-          } else {
-            kind = chipKindFor(cs, isToday, 'jaylee', c);
-            chipLabel = shortLabelFor(c, cs, 'jaylee');
+          const firstName = (c.display_name || 'customer').split(/\s+/)[0];
+          let kindClass = '', chipLabel = '';
+          if (entry.kind === 'onboarding') {
+            kindClass = 'onboarding';
+            chipLabel = 'Onboarding call · ' + firstName;
+          } else if (entry.kind === 'clean') {
+            const jt = c.next_scheduled_job_type || c.first_visit_job_type;
+            kindClass = newJobKindFor(jt);
+            chipLabel = shortJobTypeLabel(jt) + ' · ' + firstName;
+          } else if (entry.kind === 'pitch-preview') {
+            kindClass = 'pitch-preview';
+            chipLabel = 'Recurring pitch · ' + firstName;
+          } else if (entry.kind === 'pitch-active') {
+            kindClass = 'pitch-active';
+            chipLabel = 'Recurring pitch · ' + firstName;
+          } else if (entry.kind === 'first-recurring') {
+            kindClass = 'visit';
+            chipLabel = 'First recurring · ' + firstName;
           }
-          return '<div class="cal-chip ' + kind + '" data-open-cid="' + esc(c.customer_id) + '" ' +
+          return '<div class="cal-chip ' + kindClass + '" data-open-cid="' + esc(c.customer_id) + '" ' +
                  'title="' + esc(chipLabel) + '">' +
                  esc(chipLabel) + '</div>';
         }).join('');
@@ -2466,7 +2507,13 @@
     const calendarHtml =
       '<h3 class="roster-section-head">Jaylee\'s 4-week calendar</h3>' +
       '<div class="roster-section-help">' +
-        'Onboarding calls and recurring pitches for New Customers. Pitches auto-schedule the day after each customer\'s first clean. Click any chip to open the customer\'s panel.' +
+        'Color key: ' +
+          '<span class="cal-chip onboarding" style="display:inline-block;padding:2px 6px;font-size:10px">Onboarding call</span> = red · ' +
+          '<span class="cal-chip newjob" style="display:inline-block;padding:2px 6px;font-size:10px">Intro clean</span> teal · ' +
+          '<span class="cal-chip newjob-move" style="display:inline-block;padding:2px 6px;font-size:10px">Move In/Out</span> orange · ' +
+          '<span class="cal-chip pitch-preview" style="display:inline-block;padding:2px 6px;font-size:10px">Pitch preview</span> amber · ' +
+          '<span class="cal-chip pitch-active" style="display:inline-block;padding:2px 6px;font-size:10px">Pitch due</span> purple. ' +
+        'Onboarding calls repeat on TODAY until logged — Jaylee should reach out daily until she connects.' +
       '</div>' +
       '<div class="month-cal">' + calHeadHtml + calRowsHtml + '</div>';
 
