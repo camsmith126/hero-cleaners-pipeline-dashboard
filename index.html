@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260721T113515">
+<meta name="hc-build-id" content="20260721T115003">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -2365,8 +2365,25 @@
       if (ps.lost || ps.current_stage === 'Lost') return false;
       const cs = ps.current_stage;
       if (typeof cs !== 'number') return false;
-      return cs >= 1 && cs <= 7;
+      if (cs < 1 || cs > 7) return false;
+      // Sold on recurring and future first-recurring scheduled → they belong to
+      // Halee on the Roster tab, not on Jaylee's New Customers list.
+      if (isNewConvert(c)) return false;
+      return true;
     });
+  }
+
+  // Compute the preemptive pitch-chip date for a new customer at stages 1-4.
+  // Pitch = day AFTER the first clean (matches Cam's day-after-clean rule).
+  // Returns null for customers who already have a pitch signal from
+  // actionDueDate (Stage 5), or who don't have a computable first-clean date.
+  function previewPitchDate(c) {
+    const cs = (c.pipeline_stage || {}).current_stage;
+    if (typeof cs !== 'number' || cs < 1 || cs > 4) return null;
+    const base = parseIsoDate(c.next_scheduled) || parseIsoDate(c.first_visit);
+    if (!base) return null;
+    const d = new Date(base); d.setDate(d.getDate() + 1);
+    return rollSundayForward(d);
   }
 
   function renderNewCustomersTab(container) {
@@ -2382,15 +2399,26 @@
       const d = new Date(wkStart); d.setDate(d.getDate() + i); return d;
     });
 
-    // Bucket by day. Only stages with a calendar-worthy chip (2 onboarding
-    // call, 5 recurring pitch, plus 1/3 first-clean informational, plus 7
-    // first-recurring) contribute.
+    // Bucket by day. Each customer contributes:
+    //   1. their current-stage action chip (actionDueDate — S2 onboarding
+    //      call, S5 pitch attempt, S1/3/4 first-clean informational, S7
+    //      first-recurring)
+    //   2. a preview pitch chip on day-after-first-clean if they\'re at
+    //      stages 1-4 (Cam wants to see tomorrow\'s pitch before the
+    //      customer has advanced to S5 — so Jaylee can plan the day).
+    // Chip entries are objects: {customer, kind: 'action'|'pitch'}.
     const byDay = days.map(function(){ return []; });
     custs.forEach(function(c){
       const due = actionDueDate(c);
-      if (!due || due < wkStart || due > windowEnd) return;
-      const idx = daysBetween(due, wkStart);
-      byDay[idx].push(c);
+      if (due && due >= wkStart && due <= windowEnd) {
+        const idx = daysBetween(due, wkStart);
+        byDay[idx].push({c: c, kind: 'action'});
+      }
+      const pitchDate = previewPitchDate(c);
+      if (pitchDate && pitchDate >= wkStart && pitchDate <= windowEnd) {
+        const idx = daysBetween(pitchDate, wkStart);
+        byDay[idx].push({c: c, kind: 'pitch'});
+      }
     });
 
     const dayHeadNames = ['MON','TUE','WED','THU','FRI','SAT','SUN'];
@@ -2407,10 +2435,18 @@
         const d = days[dayIdx];
         const isToday = isoOf(d) === isoOf(today);
         const isPast = !isToday && d < today;
-        const chips = byDay[dayIdx].map(function(c){
+        const chips = byDay[dayIdx].map(function(entry){
+          const c = entry.c;
           const cs = (c.pipeline_stage || {}).current_stage;
-          const kind = chipKindFor(cs, isToday, 'jaylee', c);
-          const chipLabel = shortLabelFor(c, cs, 'jaylee');
+          let kind, chipLabel;
+          if (entry.kind === 'pitch') {
+            // Preview pitch chip — always styled as a phone-call action.
+            kind = isToday ? 'urgent' : 'call';
+            chipLabel = 'Recurring pitch · ' + (c.display_name || 'customer').split(' ')[0];
+          } else {
+            kind = chipKindFor(cs, isToday, 'jaylee', c);
+            chipLabel = shortLabelFor(c, cs, 'jaylee');
+          }
           return '<div class="cal-chip ' + kind + '" data-open-cid="' + esc(c.customer_id) + '" ' +
                  'title="' + esc(chipLabel) + '">' +
                  esc(chipLabel) + '</div>';
