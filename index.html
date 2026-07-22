@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260722T115530">
+<meta name="hc-build-id" content="20260722T120631">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1176,6 +1176,10 @@
     background: #F9FAFB; color: var(--text);
     border-color: var(--border); cursor: default;
   }
+  /* 2026-07-22 (Cam): the Edit button lives INSIDE .stage-card-body, so the
+     locked body\'s pointer-events: none was swallowing its clicks — no way
+     to unlock a populated card. Re-enable clicks on the Edit control only. */
+  .stage-card-body.locked .stage-edit { pointer-events: auto; cursor: pointer; }
   .stage-field-row {
     display: flex; gap: 12px; align-items: baseline;
     padding: 6px 0; border-top: 1px dashed var(--border);
@@ -3958,47 +3962,58 @@
     };
   }
 
-  // ---- Stage 3: HCP auto (Duration/Cleaner/Flags/Revenue) — no editable
+  // ---- Stage 3: First clean + Seed planted (Cam 2026-07-22 merged 3&4)
+  // The clean happens (auto from HCP) and same-day Jaylee logs the seed
+  // planted outcome (Read/Triad given/notes) on this ONE card. Save writes
+  // a seed_planted action which advances both stages 3 and 4. Stage 4 card
+  // then shows a "combined" pointer so nobody looks for the form there.
   function stage3Body(c, state) {
     const cleaner = Array.isArray(c.first_visit_cleaners)
       ? c.first_visit_cleaners.filter(Boolean).join(', ')
       : (c.first_visit_cleaners || '—');
     const first = c.first_visit ? fmtDateShort(c.first_visit) : '—';
-    return {
-      locked: true,
-      html:
-        '<div class="stage-field-row"><span class="field-label">First clean date</span><span class="field-value">' + esc(first) + '<span class="stage-hint" style="display:inline;margin-left:8px">from HCP</span></span></div>' +
-        '<div class="stage-field-row"><span class="field-label">Cleaner(s)</span><span class="field-value">' + esc(cleaner) + '<span class="stage-hint" style="display:inline;margin-left:8px">from HCP</span></span></div>' +
-        '<div class="stage-hint">Duration + HCP flags land here once we surface them in the snapshot (Phase 5+).</div>'
-    };
-  }
-
-  // ---- Stage 4: Seed planted — cleaner-recorded via HCP checklist
-  function stage4Body(c, state) {
     const a = latestActionFor(c, 'seed_planted');
     const d = (a && a.event_data) || {};
     const populated = !!a;
     const editBtn = populated
-      ? '<button type="button" class="stage-edit" data-stage-edit="4">✎ Edit</button>'
+      ? '<button type="button" class="stage-edit" data-stage-edit="3">✎ Edit</button>'
       : '';
     const retroBadge = (populated && d.retroactive)
       ? '<span class="retroactive-badge">back-filled</span>'
       : '';
-    const read = d.read || '';
+    const readVal = d.read || '';
     const triad = (d.triad_given != null ? (d.triad_given ? 'true' : 'false') : '');
+    const notes = d.notes || '';
     return {
       locked: populated,
       html:
-        (editBtn ? '<div class="stage-field-row"><span class="field-label"></span><span class="field-value" style="text-align:right">' + retroBadge + editBtn + '</span></div>' : '') +
+        (editBtn || retroBadge ? '<div class="stage-field-row"><span class="field-label"></span><span class="field-value" style="text-align:right">' + retroBadge + editBtn + '</span></div>' : '') +
+        '<div class="stage-field-row"><span class="field-label">First clean date</span><span class="field-value">' + esc(first) + '<span class="stage-hint" style="display:inline;margin-left:8px">from HCP</span></span></div>' +
+        '<div class="stage-field-row"><span class="field-label">Cleaner(s)</span><span class="field-value">' + esc(cleaner) + '<span class="stage-hint" style="display:inline;margin-left:8px">from HCP</span></span></div>' +
+        '<div class="stage-hint" style="margin-top:8px">— Seed planted (log same day as the clean) —</div>' +
         '<div class="stage-field-row"><span class="field-label">Read</span><span class="field-value">' +
-          segmented('__s4_read', [['hot','Hot'],['luke_warm','Luke Warm'],['cold','Cold']], read) +
+          segmented('__s3_read', [['hot','Hot'],['luke_warm','Luke Warm'],['cold','Cold']], readVal) +
         '</span></div>' +
         '<div class="stage-field-row"><span class="field-label">Triad given</span><span class="field-value">' +
-          segmented('__s4_triad', [['true','Yes'],['false','No']], triad) +
+          segmented('__s3_triad', [['true','Yes'],['false','No']], triad) +
         '</span></div>' +
-        '<input type="hidden" data-stage-field="4" data-field="read" value="' + esc(read) + '"/>' +
-        '<input type="hidden" data-stage-field="4" data-field="triad_given" value="' + esc(triad) + '"/>' +
-        '<div class="stage-hint">Framework note: cleaners normally record this via HCP checklist. This card is for back-fill or manual capture.</div>'
+        '<div class="stage-field-row"><span class="field-label">Notes</span><span class="field-value">' +
+          '<textarea class="form-textarea" data-stage-field="3" data-field="notes" placeholder="How the clean went, anything worth remembering…">' + esc(notes) + '</textarea>' +
+        '</span></div>' +
+        '<input type="hidden" data-stage-field="3" data-field="read" value="' + esc(readVal) + '"/>' +
+        '<input type="hidden" data-stage-field="3" data-field="triad_given" value="' + esc(triad) + '"/>'
+    };
+  }
+
+  // ---- Stage 4: combined into Stage 3 (Cam 2026-07-22). Pill still renders
+  // (auto-done alongside 3) but the card is now a pointer only — no separate
+  // form. Keeps the numbering intact without confusing anyone about where
+  // to enter data.
+  function stage4Body(c, state) {
+    return {
+      locked: true,
+      html:
+        '<div class="stage-hint">Combined with Stage 3 — Read, Triad given, and Notes are captured on the First clean card. This pill auto-flips done when Stage 3 is saved.</div>'
     };
   }
 
@@ -4839,6 +4854,12 @@
     // convention below.
     const SEGMENTED_MAP = {
       '__s2_contact':      {stage: 2, field: 'contact_method',       type: 'str'},
+      // Stage 3 (2026-07-22 merged) — seed_planted fields moved from Stage 4.
+      '__s3_read':         {stage: 3, field: 'read',                 type: 'str'},
+      '__s3_triad':        {stage: 3, field: 'triad_given',          type: 'bool'},
+      // Legacy Stage 4 mirrors — kept in case any older card is still in the
+      // DOM (e.g. a stray back-fill flow). Safe to leave; not referenced by
+      // the new Stage 3 body.
       '__s4_read':         {stage: 4, field: 'read',                 type: 'str'},
       '__s4_triad':        {stage: 4, field: 'triad_given',          type: 'bool'},
       '__s5_answered':     {stage: 5, field: 'answered',             type: 'bool'},
@@ -5116,7 +5137,9 @@
     // current_stage as the lowest still-not-done in 1..10.
     const doneMap = {
       'onboarding_call':                 [2],
-      'seed_planted':                    [4],
+      // seed_planted lives on Stage 3\'s card (Cam merged 3+4 2026-07-22).
+      // Marking both stages done here so the pill row updates in one shot.
+      'seed_planted':                    [3, 4],
       'recurring_pitch_won':             [5, 6],
       'recurring_pitch_estimate_sent':   [5],
       'recurring_pitch_pending_response':[5],
@@ -5216,6 +5239,30 @@
         mirrorActionLocally(c, 'onboarding_call', eventData, Array.isArray(resp2) ? resp2[0] : null);
         advanceStageLocally(c, 'onboarding_call');
         toast('Saved. Onboarding call logged — advanced to Stage 3.' + (eventData.retroactive ? ' (back-fill)' : ''));
+      } else if (n === 3) {
+        // Merged first-clean + seed-planted card (Cam 2026-07-22). Writes a
+        // seed_planted action which advances stages 3 AND 4 (see doneMap in
+        // advanceStageLocally). Notes are new here; Read + Triad_given
+        // migrated from the old Stage 4 form untouched.
+        const eventData = {
+          read:        read('read')  || null,
+          triad_given: readBool('triad_given'),
+          notes:       read('notes') || null,
+          retroactive: shouldFlagRetroactive(c, 3, 'seed_planted') ? true : undefined
+        };
+        Object.keys(eventData).forEach(k => eventData[k] === undefined && delete eventData[k]);
+        const resp3 = await sb('customer_actions', {
+          method: 'POST',
+          body: JSON.stringify({
+            customer_id: c.customer_id,
+            stage_name:  'seed_planted',
+            event_data:  eventData,
+            logged_by:   loggedBy()
+          })
+        });
+        mirrorActionLocally(c, 'seed_planted', eventData, Array.isArray(resp3) ? resp3[0] : null);
+        advanceStageLocally(c, 'seed_planted');
+        toast('Saved. First clean + Seed planted logged — advanced to Stage 5.' + (eventData.retroactive ? ' (back-fill)' : ''));
       } else if (n === 4) {
         const eventData = {
           read:        read('read')  || null,
