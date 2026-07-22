@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260722T141605">
+<meta name="hc-build-id" content="20260722T142124">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -2787,6 +2787,28 @@
     });
   }
 
+  // Lost roster customers this year: currently Lost + had a recurring
+  // visit in the current calendar year. Keeps ancient losses off the list
+  // while showing everyone who was on the roster during the year and left.
+  function lostThisYearCohort() {
+    const yearStart = String(todayDate().getFullYear()) + '-01-01';
+    return CUSTOMERS.filter(function(c){
+      if (c.established) return false;
+      const ps = c.pipeline_stage || {};
+      const isLost = ps.lost || ps.current_stage === 'Lost';
+      if (!isLost) return false;
+      const lrv = (c.last_rec_visit || '').slice(0, 10);
+      if (!lrv) return false;
+      return lrv >= yearStart;
+    }).sort(function(a, b){
+      // Most recent Lost first — sort by last_rec_visit descending.
+      const la = (a.last_rec_visit || '').slice(0, 10);
+      const lb = (b.last_rec_visit || '').slice(0, 10);
+      if (la !== lb) return lb.localeCompare(la);
+      return (a.display_name || '').localeCompare(b.display_name || '');
+    });
+  }
+
   // 2026-07-20 (Cam): a customer is a "new convert" if their FIRST RECURRING
   // VISIT is still in the future. They flow through the 10-step pipeline
   // (Jaylee owns 1-6, Halee owns 7-10) and graduate to Established once
@@ -3038,15 +3060,35 @@
       '</tr>';
     };
 
+    // Lost row — same shape as established except First recurring →
+    // Last recurring visit, and no check-in boxes (they\'re Lost).
+    const lostRowHtml = function(c){
+      const rate = c.rate ? '$' + Number(c.rate).toFixed(0) : '—';
+      const lrv = c.last_rec_visit ? fmtDateShort(c.last_rec_visit) : '—';
+      const tenure = tenureLabel(tenureDaysOf(c));
+      return '<tr class="roster-row" data-open-cid="' + esc(c.customer_id) + '" data-roster-kind="lost">' +
+        '<td><a href="#" onclick="event.preventDefault()"><strong>' + esc(c.display_name || '') + '</strong></a></td>' +
+        '<td>' + esc(c.frequency || '—') + '</td>' +
+        '<td class="right">' + esc(rate) + '</td>' +
+        '<td>' + esc(lrv) + '</td>' +
+        '<td>' + esc(tenure) + '</td>' +
+        '<td><span class="checkin-status done" style="background:#FEE2E2;color:#991B1B">Lost</span></td>' +
+      '</tr>';
+    };
+
     // renderPipelinePill + renderNewConvertCard now live at top-level so both
     // the Roster and New Customers tabs can share them (see below).
 
-    const tableHtml = function(rowsIn, emptyMsg, rowFn, lastColHead) {
+    const tableHtml = function(rowsIn, emptyMsg, rowFn, lastColHead, colOverrides) {
       // Same 6-column head but the last column label differs per section
-      // ("Pipeline stage" for new converts vs "Check-ins" for established).
+      // ("Check-ins" for retained, "Lost" for lost). colOverrides is a
+      // {colId: newLabel} map for arbitrary column relabeling
+      // (e.g. Lost section swaps First recurring → Last recurring visit).
+      const overrides = colOverrides || {};
       const localHeaders = headers.map(function(h){
-        if (h[0] !== 'checkins') return h;
-        return ['checkins', lastColHead || h[1]];
+        if (h[0] === 'checkins' && lastColHead) return ['checkins', lastColHead];
+        if (overrides[h[0]]) return [h[0], overrides[h[0]]];
+        return h;
       });
       const localHeadHtml = '<tr>' + localHeaders.map(function(h){
         const arrow = sort.col === h[0] ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : '';
@@ -3162,7 +3204,31 @@
         (filter ? 'No retained customers match your filter.' : 'Nobody on the retained roster yet.'),
         establishedRowHtml,
         'Check-ins'
-      );
+      ) +
+
+      // Lost this year — customers we had on the roster during the current
+      // calendar year who have since left. Same shape as Retained except
+      // First recurring → Last recurring visit, and the Check-ins column
+      // renders as a Lost badge.
+      (function(){
+        const lostRows = lostThisYearCohort().filter(function(c){
+          if (!filter) return true;
+          const q = filter.toLowerCase();
+          return (c.display_name || '').toLowerCase().indexOf(q) >= 0
+              || (c.frequency || '').toLowerCase().indexOf(q) >= 0;
+        });
+        return '<h3 class="roster-section-head" style="margin-top:32px">Lost <span class="tab-count">' + lostRows.length + '</span></h3>' +
+          '<div class="roster-section-help">' +
+            'Recurring customers we\'ve lost this year. Sorted by most-recent last-recurring visit.' +
+          '</div>' +
+          tableHtml(
+            lostRows,
+            (filter ? 'No lost customers match your filter.' : 'No lost recurring customers yet this year.'),
+            lostRowHtml,
+            'Status',
+            {'first_rec': 'Last recurring visit'}
+          );
+      })();
 
     // Sort header clicks.
     container.querySelectorAll('.roster-th').forEach(function(th){
@@ -3213,8 +3279,11 @@
         if (ev.target.closest('.roster-box')) return;
         const cid = row.getAttribute('data-open-cid');
         const kind = row.getAttribute('data-roster-kind');
-        if (kind === 'new-convert') openPanel(cid);
-        else openRosterPanel(cid);
+        // Lost rows and New Recurring cards both open the 10-stage detail
+        // panel (full history / timeline is what\'s useful for review).
+        // Established rows open the 4-check-in side panel.
+        if (kind === 'established') openRosterPanel(cid);
+        else openPanel(cid);
       });
     });
     // Calendar chips → open the 10-stage detail panel (same as new-convert
