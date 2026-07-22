@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260722T123801">
+<meta name="hc-build-id" content="20260722T125708">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -683,6 +683,7 @@
   .cal-chip.onboarding    { background: #DC2626; }   /* red — call today */
   .cal-chip.pitch-preview { background: #D97706; }   /* amber — pitch tomorrow */
   .cal-chip.pitch-active  { background: #6D28D9; }   /* deep purple — pitch due */
+  .cal-chip.followup      { background: #A78BFA; color: #1E1B4B; }   /* lavender — warm-lead follow-up */
   .cal-chip:hover { opacity: 0.85; }
   /* Group list rows (categorized customer lists) */
   .group-row {
@@ -1271,7 +1272,7 @@
     <h1>Hero Cleaners — Customer Pipeline</h1>
     <div class="subtitle">
       Phase 3 · focus tabs · Halee + Jaylee interactive · click any card to log an action ·
-      generated 2026-07-22T12:35:35.486967 · snapshot date 2026-07-22 ·
+      generated 2026-07-22T12:57:08.090264 · snapshot date 2026-07-22 ·
       <a href="https://camsmith126.github.io/hero-cleaners-residential-dashboard/" style="color:#C5CBD3">← residential dashboard</a>
     </div>
   </div>
@@ -2413,12 +2414,60 @@
       if (ps.lost || ps.current_stage === 'Lost') return false;
       const cs = ps.current_stage;
       if (typeof cs !== 'number') return false;
-      if (cs < 1 || cs > 7) return false;
-      // Sold on recurring and future first-recurring scheduled → they belong to
-      // Halee on the Roster tab, not on Jaylee's New Customers list.
+      // Renumbered 2026-07-22: Jaylee owns stages 1-4 (Booked → Recurring pitch).
+      // Anything at stage 5+ belongs to Halee via the Roster tab.
+      if (cs < 1 || cs > 4) return false;
       if (isNewConvert(c)) return false;
       return true;
     });
+  }
+
+  // Lost cohort — customers Jaylee worked and lost. Rendered below the active
+  // New Customers grid so she has one place to review closed work.
+  function lostCustomersCohort() {
+    return CUSTOMERS.filter(function(c){
+      if (!COHORT.passes(c)) return false;
+      if (c.established) return false;
+      const ps = c.pipeline_stage || {};
+      return !!(ps.lost || ps.current_stage === 'Lost');
+    }).sort(function(a, b){
+      // Sort by most-recent lost_outcome first (fallback: name)
+      const lostAt = function(c) {
+        const a = (c.pipeline_actions || []).filter(function(x){ return x.stage_name === 'lost_outcome'; })
+          .sort(function(x, y){ return (y.logged_at || '').localeCompare(x.logged_at || ''); })[0];
+        return (a && a.logged_at) || '';
+      };
+      const la = lostAt(a), lb = lostAt(b);
+      if (la !== lb) return lb.localeCompare(la);
+      return (a.display_name || '').localeCompare(b.display_name || '');
+    });
+  }
+
+  // Follow-up due date (Cam 2026-07-22). When Jaylee logs Estimate sent or
+  // Pending response, she has up to 3 follow-ups at 3-day cadence. Returns
+  // the next follow-up date, or null if no follow-up is due (either no
+  // terminal was Estimate/Pending, or Won/Lost already logged, or 3
+  // follow-ups already exhausted).
+  function followupDueDate(c) {
+    // Skip if Won or Lost already logged.
+    if (latestActionFor(c, 'recurring_pitch_won')) return null;
+    if (latestActionFor(c, 'lost_outcome')) return null;
+    // Need an estimate_sent or pending_response terminal.
+    const est  = latestActionFor(c, 'recurring_pitch_estimate_sent');
+    const pend = latestActionFor(c, 'recurring_pitch_pending_response');
+    const terminal = est || pend;
+    if (!terminal || !terminal.logged_at) return null;
+    // Followups already logged.
+    const followups = (c.pipeline_actions || []).filter(function(a){
+      return (a.stage_name || '').indexOf('recurring_pitch_followup_') === 0;
+    }).sort(function(x, y){ return (y.logged_at || '').localeCompare(x.logged_at || ''); });
+    if (followups.length >= 3) return null;
+    // Base date = latest followup logged_at OR the terminal logged_at.
+    const baseIso = (followups[0] && followups[0].logged_at) || terminal.logged_at;
+    const base = parseIsoDate((baseIso || '').slice(0, 10));
+    if (!base) return null;
+    const d = new Date(base); d.setDate(d.getDate() + 3);
+    return rollSundayForward(d);
   }
 
   // Stage 4 quiet-wait: a customer with recurring_pitch_attempt_3 logged
@@ -2507,6 +2556,15 @@
         pushChip(p, {c: c, kind: 'pitch-active'});
       }
 
+      // Follow-up chip (Cam 2026-07-22) — Stage 4 customer with Estimate sent
+      // or Pending response, 3 days after the terminal (or after the latest
+      // follow-up). Distinct lavender color so Jaylee can tell "warm lead
+      // follow-up" from "cold-call attempt" at a glance.
+      if (cs === 4) {
+        const fu = followupDueDate(c);
+        if (fu) pushChip(fu, {c: c, kind: 'followup'});
+      }
+
       // First-recurring chip — Stage 5.
       if (cs === 5) {
         const frv = parseIsoDate(c.first_rec_visit) || parseIsoDate(c.next_scheduled);
@@ -2548,6 +2606,9 @@
           } else if (entry.kind === 'first-recurring') {
             kindClass = 'visit';
             chipLabel = 'First recurring · ' + firstName;
+          } else if (entry.kind === 'followup') {
+            kindClass = 'followup';
+            chipLabel = 'Follow-up · ' + firstName;
           }
           return '<div class="cal-chip ' + kindClass + '" data-open-cid="' + esc(c.customer_id) + '" ' +
                  'title="' + esc(chipLabel) + '">' +
@@ -2573,7 +2634,8 @@
           '<span class="cal-chip newjob" style="display:inline-block;padding:2px 6px;font-size:10px">Intro clean</span> teal · ' +
           '<span class="cal-chip newjob-move" style="display:inline-block;padding:2px 6px;font-size:10px">Move In/Out</span> orange · ' +
           '<span class="cal-chip pitch-preview" style="display:inline-block;padding:2px 6px;font-size:10px">Pitch preview</span> amber · ' +
-          '<span class="cal-chip pitch-active" style="display:inline-block;padding:2px 6px;font-size:10px">Pitch due</span> purple. ' +
+          '<span class="cal-chip pitch-active" style="display:inline-block;padding:2px 6px;font-size:10px">Pitch due</span> purple · ' +
+          '<span class="cal-chip followup" style="display:inline-block;padding:2px 6px;font-size:10px">Follow-up</span> lavender. ' +
         'Onboarding calls repeat on TODAY until logged — Jaylee should reach out daily until she connects.' +
       '</div>' +
       '<div class="month-cal">' + calHeadHtml + calRowsHtml + '</div>';
@@ -2592,20 +2654,32 @@
           'No new customers in the current cohort. When Jaylee books a first clean, they\'ll land here.' +
         '</div>';
 
+    // Lost cohort — same card renderer, sorted by most-recent-lost first.
+    const lostCusts = lostCustomersCohort();
+    const lostCardsHtml = lostCusts.length
+      ? lostCusts.map(renderNewConvertCard).join('')
+      : '<div class="group-empty" style="margin:8px 24px 16px">Nobody lost yet from the current cohort.</div>';
+
     container.innerHTML =
       '<div class="roster-header">' +
         '<div class="focus-title">New Customers</div>' +
         '<div class="focus-subtitle">' + custs.length + ' customer' + (custs.length !== 1 ? 's' : '') +
-          ' currently in stages 1-7. Once they hit their first recurring visit, they graduate to the Roster tab for Halee to pick up.</div>' +
+          ' currently in stages 1-4. Once they hit their first recurring visit, they graduate to the Roster tab for Halee to pick up.</div>' +
       '</div>' +
 
       calendarHtml +
 
       '<h3 class="roster-section-head">New Customers <span class="tab-count">' + custs.length + '</span></h3>' +
       '<div class="roster-section-help">' +
-        'Every customer Jaylee is working through the pipeline. Sorted by soonest action date. Click a card to open the 10-stage detail panel.' +
+        'Every customer Jaylee is working through the pipeline. Sorted by soonest action date. Click a card to open the detail panel.' +
       '</div>' +
-      '<div class="roster-cards-wrap">' + cardsHtml + '</div>';
+      '<div class="roster-cards-wrap">' + cardsHtml + '</div>' +
+
+      '<h3 class="roster-section-head" style="margin-top:32px">Lost <span class="tab-count">' + lostCusts.length + '</span></h3>' +
+      '<div class="roster-section-help">' +
+        'Customers Jaylee worked and lost. Sorted by most-recent-lost first. Click a card to review the timeline.' +
+      '</div>' +
+      '<div class="roster-cards-wrap">' + lostCardsHtml + '</div>';
 
     // Calendar chips + cards both open the detail panel.
     container.querySelectorAll('.cal-chip[data-open-cid]').forEach(function(chip){
@@ -4138,6 +4212,59 @@
     const retroBadge = (won && winD.retroactive) || (lost && lostD.retroactive)
       ? '<span class="retroactive-badge">back-filled</span>' : '';
 
+    // ---- Follow-ups (Cam 2026-07-22) — 3-day cadence after Estimate sent
+    // or Pending response. Won/Lost picked on any follow-up escalates
+    // immediately by also writing the terminal action. 3 follow-ups
+    // without a decision → classifier auto-Losts with reason
+    // no_response_after_3_followups. ----
+    const followupActions = (c.pipeline_actions || []).filter(function(a){
+      return (a.stage_name || '').indexOf('recurring_pitch_followup_') === 0;
+    }).map(function(a){
+      const n = parseInt(a.stage_name.slice(-1), 10);
+      const d = a.event_data || {};
+      return {n:n, outcome: d.outcome || '', notes: d.notes || '', logged_at: a.logged_at, logged_by: a.logged_by};
+    }).sort(function(a, b){ return a.n - b.n; });
+    const followupWon  = followupActions.some(function(f){ return f.outcome === 'won'; });
+    const followupLost = followupActions.some(function(f){ return f.outcome === 'lost'; });
+    const followupsClosed = followupWon || followupLost || followupActions.length >= 3 || won || lost;
+    const nextFollowup = followupsClosed ? 0 : Math.min(followupActions.length + 1, 3);
+    const followupVisible = (initialResult === 'estimate_sent' || initialResult === 'pending_response');
+
+    const followupTracker = [1,2,3].map(function(n){
+      const prior = followupActions.find(function(f){ return f.n === n; });
+      if (prior) {
+        const outcomeLbl = ({
+          won: '✓ Won',
+          lost: '✕ Lost',
+          still_thinking: '· Still thinking',
+          no_answer: '· No answer'
+        })[prior.outcome] || prior.outcome;
+        return '<div class="pitch-attempt done">' +
+          '<span class="pitch-attempt-n">Follow-up ' + n + '</span>' +
+          '<span class="pitch-attempt-result">' + esc(outcomeLbl) + '</span>' +
+          '<span class="pitch-attempt-when">' + esc(fmtLogged(prior)) + '</span></div>';
+      }
+      const isActive = (n === nextFollowup);
+      const inactiveLabel = followupsClosed
+        ? 'Not needed'
+        : 'Waiting on follow-up ' + (n-1);
+      return '<div class="pitch-attempt' + (isActive ? ' active' : ' pending') + '">' +
+        '<span class="pitch-attempt-n">Follow-up ' + n + '</span>' +
+        (isActive
+          ? '<span class="pitch-attempt-controls">' + segmented('__s4_fu_outcome',
+              [['won','Won'],['lost','Lost'],['still_thinking','Still thinking'],['no_answer','No answer']], '') + '</span>'
+          : '<span class="pitch-attempt-result muted">' + esc(inactiveLabel) + '</span>'
+        ) + '</div>';
+    }).join('');
+
+    const followupBlock = followupVisible ? (
+      '<div data-s4-block="followups" style="margin-top:12px">' +
+        '<div class="stage-hint" style="border-top:1px dashed var(--border);padding-top:12px">— Follow-ups (3-day cadence) —</div>' +
+        '<div class="stage-hint" style="font-size:11px;color:var(--text-muted);margin-top:-4px">Warm-lead nurture. Won / Lost escalates immediately. 3 follow-ups without a decision auto-Lost.</div>' +
+        '<div class="pitch-tracker" style="margin-top:10px">' + followupTracker + '</div>' +
+      '</div>'
+    ) : '';
+
     return {
       locked: terminalPopulated,   // Edit unlocks; attempts row remains interactive via its own scope
       html:
@@ -4177,6 +4304,7 @@
             '<select class="form-input" data-stage-field="4" data-field="lost_reason" style="max-width:220px">' + reasonOpts + '</select>' +
           '</span></div>' +
         '</div>' +
+        followupBlock +
         // One shared Notes textarea.
         '<div class="stage-field-row"><span class="field-label">Notes</span><span class="field-value">' +
           '<textarea class="form-textarea" data-stage-field="4" data-field="notes" placeholder="Context, price objections, timing…">' + esc(notes) + '</textarea>' +
@@ -4186,7 +4314,9 @@
         '<input type="hidden" data-stage-field="4" data-field="outcome" value=""/>' +
         '<input type="hidden" data-stage-field="4" data-field="text_sent" value=""/>' +
         '<input type="hidden" data-stage-field="4" data-field="result" value="' + esc(initialResult) + '"/>' +
-        '<input type="hidden" data-stage-field="4" data-field="attempt_number" value="' + nextAttempt + '"/>'
+        '<input type="hidden" data-stage-field="4" data-field="attempt_number" value="' + nextAttempt + '"/>' +
+        '<input type="hidden" data-stage-field="4" data-field="fu_outcome" value=""/>' +
+        '<input type="hidden" data-stage-field="4" data-field="fu_number" value="' + nextFollowup + '"/>'
     };
   }
 
@@ -4876,6 +5006,7 @@
       '__s4_outcome':      {stage: 4, field: 'outcome',              type: 'str'},
       '__s4_text_sent':    {stage: 4, field: 'text_sent',            type: 'bool'},
       '__s4_result':       {stage: 4, field: 'result',               type: 'str'},
+      '__s4_fu_outcome':   {stage: 4, field: 'fu_outcome',           type: 'str'},
       // Stage 5 (was 7): first check-in. Segmented keys still spell __s7_*
       // because the stage-body function name is stage7Body (unchanged for
       // now); the mapping.stage value drives which stage number the
@@ -5290,12 +5421,19 @@
         const textSentNow = readBool('text_sent');
         const result      = read('result');
         const notes       = read('notes') || '';
+        // Follow-up (Cam 2026-07-22): when Result is estimate_sent or
+        // pending_response, Jaylee can log up to 3 follow-ups on a 3-day
+        // cadence. Won/Lost picked here escalates by also writing the
+        // terminal action.
+        const fuOutcome = read('fu_outcome');
+        const fuNumber  = parseInt(read('fu_number') || '0', 10);
+        const freshFollowup = (fuOutcome && fuNumber >= 1 && fuNumber <= 3);
 
         const freshAttempt = (answeredNow !== null && attemptN <= 3);
 
-        // Validate: must save SOMETHING (either an attempt or a result).
-        if (!freshAttempt && !result) {
-          toast('Pick Answered / No answer to log an attempt, OR pick a Result to close this stage.', true);
+        // Validate: must save SOMETHING.
+        if (!freshAttempt && !result && !freshFollowup) {
+          toast('Pick Answered / No answer, a Result, or a follow-up outcome.', true);
           throw new Error('nothing to save on stage 4');
         }
 
@@ -5361,13 +5499,72 @@
           advanceStageLocally(c, STAGE_NAME);
         }
 
+        // ---- 3) Follow-up row ----
+        if (freshFollowup) {
+          const fuName = 'recurring_pitch_followup_' + fuNumber;
+          const fuEvent = { outcome: fuOutcome, notes: notes || null };
+          const respFu = await sb('customer_actions', {
+            method: 'POST',
+            body: JSON.stringify({
+              customer_id: c.customer_id,
+              stage_name:  fuName,
+              event_data:  fuEvent,
+              logged_by:   loggedBy()
+            })
+          });
+          mirrorActionLocally(c, fuName, fuEvent, Array.isArray(respFu) ? respFu[0] : null);
+
+          // Escalate: Won on a follow-up also writes recurring_pitch_won and
+          // advances the stage. Lost does the same via lost_outcome.
+          if (fuOutcome === 'won') {
+            const wonEvent = { notes: notes || null };
+            const respWon = await sb('customer_actions', {
+              method: 'POST',
+              body: JSON.stringify({
+                customer_id: c.customer_id,
+                stage_name:  'recurring_pitch_won',
+                event_data:  wonEvent,
+                logged_by:   loggedBy()
+              })
+            });
+            mirrorActionLocally(c, 'recurring_pitch_won', wonEvent, Array.isArray(respWon) ? respWon[0] : null);
+            advanceStageLocally(c, 'recurring_pitch_won');
+          } else if (fuOutcome === 'lost') {
+            const lostEvent = {
+              reason: 'declined_at_followup',
+              notes: notes || null
+            };
+            const respLost = await sb('customer_actions', {
+              method: 'POST',
+              body: JSON.stringify({
+                customer_id: c.customer_id,
+                stage_name:  'lost_outcome',
+                event_data:  lostEvent,
+                logged_by:   loggedBy()
+              })
+            });
+            mirrorActionLocally(c, 'lost_outcome', lostEvent, Array.isArray(respLost) ? respLost[0] : null);
+            advanceStageLocally(c, 'lost_outcome');
+          }
+        }
+
         // Toast wording.
         let msg;
-        if (freshAttempt && result) {
+        if (freshFollowup) {
+          if (fuOutcome === 'won') {
+            msg = 'Saved. Follow-up ' + fuNumber + ' — Won. Advanced to Stage 5.';
+          } else if (fuOutcome === 'lost') {
+            msg = 'Saved. Follow-up ' + fuNumber + ' — Lost. Customer marked Lost.';
+          } else if (fuOutcome === 'still_thinking') {
+            msg = 'Saved. Follow-up ' + fuNumber + ' — still thinking. Next follow-up in 3 days.';
+          } else {
+            msg = 'Saved. Follow-up ' + fuNumber + ' — no answer. Next follow-up in 3 days.';
+          }
+        } else if (freshAttempt && result) {
           const readable = {won:'Won',lost:'Lost',estimate_sent:'Estimate sent',pending_response:'Pending'}[result];
           msg = 'Saved. Attempt ' + attemptN + ' + ' + readable + ' logged.';
         } else if (result) {
-          const readable = {won:'WON — advanced to Stage 5',lost:'Lost',estimate_sent:'Estimate sent',pending_response:'Pending'}[result];
+          const readable = {won:'WON — advanced to Stage 5',lost:'Lost',estimate_sent:'Estimate sent — 3-day follow-up starts',pending_response:'Pending — 3-day follow-up starts'}[result];
           msg = 'Saved. Recurring pitch: ' + readable + '.';
         } else {
           const tail = (attemptN === 3 && textSentNow === true)
