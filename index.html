@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260722T060027">
+<meta name="hc-build-id" content="20260722T114640">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -5088,6 +5088,74 @@
   }
 
   // ---- Phase 4: per-stage save (state → customer_profiles, event → customer_actions) ----
+  // 2026-07-21 (Cam): optimistic stage advancement after save. When a
+  // save succeeds we mutate the local customer.pipeline_stage so the
+  // just-completed stage flips to done and current_stage moves forward
+  // immediately — no waiting for the 6 AM classifier run.
+  //
+  // Rules mirror classify.py::compute_pipeline_stage. Attempts (roster
+  // check-ins, pitch attempts, first-check-in attempts) DON\'t advance
+  // the stage — only close-out actions do.
+  function advanceStageLocally(c, actionName) {
+    if (!c || !actionName) return;
+    const ps = c.pipeline_stage = c.pipeline_stage || {stages: {}, current_stage: 1};
+    const stages = ps.stages = ps.stages || {};
+
+    // Special path: explicit Lost. Marks 5+6 done and flips current_stage
+    // to 'Lost' (matches classify.py 634-640).
+    if (actionName === 'lost_outcome') {
+      stages[5] = 'done';
+      stages[6] = 'done';
+      ps.lost = true;
+      ps.current_stage = 'Lost';
+      ps.explicit_lost = true;
+      return;
+    }
+
+    // Everything else: mark specific stages done, then recompute
+    // current_stage as the lowest still-not-done in 1..10.
+    const doneMap = {
+      'onboarding_call':                 [2],
+      'seed_planted':                    [4],
+      'recurring_pitch_won':             [5, 6],
+      'recurring_pitch_estimate_sent':   [5],
+      'recurring_pitch_pending_response':[5],
+      'first_check_in':                  [8],
+      'second_check_in':                 [9, 10]
+    };
+    const bumps = doneMap[actionName] || [];
+    bumps.forEach(function(s){ stages[s] = 'done'; });
+    // Also: recurring_pitch_won implies is_recurring going forward.
+    if (actionName === 'recurring_pitch_won') {
+      c.is_recurring = true;
+      ps.explicit_won = true;
+    }
+    // Recompute current_stage: lowest 1..10 that isn\'t done.
+    let cur = null;
+    for (let i = 1; i <= 10; i++) {
+      if (stages[i] !== 'done') {
+        if (cur === null) { cur = i; stages[i] = 'current'; }
+        else { stages[i] = 'upcoming'; }
+      }
+    }
+    if (cur === null) cur = 10;
+    ps.current_stage = cur;
+  }
+
+  // Mirror a just-written customer_actions row into the local pipeline_actions
+  // list so re-opens of the panel see it without waiting for the 60s poll.
+  function mirrorActionLocally(c, actionName, eventData, insertedRow) {
+    if (!c) return;
+    if (!c.pipeline_actions) c.pipeline_actions = [];
+    c.pipeline_actions.push({
+      id:         insertedRow ? insertedRow.id : null,
+      stage_name: actionName,
+      event_data: eventData || {},
+      logged_at:  (insertedRow && insertedRow.logged_at) || new Date().toISOString(),
+      logged_by:  loggedBy()
+    });
+  }
+
   async function saveStage(n) {
     if (!CURRENT || CURRENT.saving) return;
     if (!requireIdentity()) {
@@ -5136,7 +5204,7 @@
           notes:          read('notes')          || null
         };
         if (shouldFlagRetroactive(c, 2, 'onboarding_call')) eventData.retroactive = true;
-        await sb('customer_actions', {
+        const resp2 = await sb('customer_actions', {
           method: 'POST',
           body: JSON.stringify({
             customer_id: c.customer_id,
@@ -5145,7 +5213,9 @@
             logged_by:   loggedBy()
           })
         });
-        toast('Saved. Onboarding call logged.' + (eventData.retroactive ? ' (back-fill)' : '') + ' ' + REFRESH_HINT);
+        mirrorActionLocally(c, 'onboarding_call', eventData, Array.isArray(resp2) ? resp2[0] : null);
+        advanceStageLocally(c, 'onboarding_call');
+        toast('Saved. Onboarding call logged — advanced to Stage 3.' + (eventData.retroactive ? ' (back-fill)' : ''));
       } else if (n === 4) {
         const eventData = {
           read:        read('read')  || null,
@@ -5154,7 +5224,7 @@
         };
         // Drop undefined so it doesn't sit in the payload
         Object.keys(eventData).forEach(k => eventData[k] === undefined && delete eventData[k]);
-        await sb('customer_actions', {
+        const resp4 = await sb('customer_actions', {
           method: 'POST',
           body: JSON.stringify({
             customer_id: c.customer_id,
@@ -5163,7 +5233,9 @@
             logged_by:   loggedBy()
           })
         });
-        toast('Saved. Seed planted logged.' + (eventData.retroactive ? ' (back-fill)' : '') + ' ' + REFRESH_HINT);
+        mirrorActionLocally(c, 'seed_planted', eventData, Array.isArray(resp4) ? resp4[0] : null);
+        advanceStageLocally(c, 'seed_planted');
+        toast('Saved. Seed planted logged — advanced to Stage 5.' + (eventData.retroactive ? ' (back-fill)' : ''));
       } else if (n === 5) {
         // Stage 5 is per-attempt: pick the next attempt number from the
         // hidden `attempt_number` field. Save even if just an attempt.
@@ -5184,19 +5256,23 @@
           if (textSent !== null) eventData.text_sent = textSent;
         }
         // Attempts don't get retroactive flag — each one is a fresh event.
-        await sb('customer_actions', {
+        const attName5 = 'recurring_pitch_attempt_' + attemptN;
+        const resp5 = await sb('customer_actions', {
           method: 'POST',
           body: JSON.stringify({
             customer_id: c.customer_id,
-            stage_name:  'recurring_pitch_attempt_' + attemptN,
+            stage_name:  attName5,
             event_data:  eventData,
             logged_by:   loggedBy()
           })
         });
+        // Attempts don\'t advance the stage — just mirror locally so the
+        // tracker rows show the new attempt on next render.
+        mirrorActionLocally(c, attName5, eventData, Array.isArray(resp5) ? resp5[0] : null);
         const tail = (attemptN === 3 && eventData.text_sent === true)
           ? ' 7-day quiet-wait window starts now.'
           : '';
-        toast('Saved. Attempt ' + attemptN + ' logged — card stays at Stage 5.' + tail + ' ' + REFRESH_HINT);
+        toast('Saved. Attempt ' + attemptN + ' logged — card stays at Stage 5.' + tail);
       } else if (n === 6) {
         const result = read('result');
         if (!result) {
@@ -5228,7 +5304,7 @@
           eventData.reason = read('lost_reason') || null;
         }
         if (shouldFlagRetroactive(c, 6, STAGE_NAME)) eventData.retroactive = true;
-        await sb('customer_actions', {
+        const resp6 = await sb('customer_actions', {
           method: 'POST',
           body: JSON.stringify({
             customer_id: c.customer_id,
@@ -5237,8 +5313,13 @@
             logged_by:   loggedBy()
           })
         });
+        mirrorActionLocally(c, STAGE_NAME, eventData, Array.isArray(resp6) ? resp6[0] : null);
+        advanceStageLocally(c, STAGE_NAME);
         const readable = {won:'WON',lost:'Lost',estimate_sent:'Estimate sent',pending_response:'Pending'}[result];
-        toast('Saved. Recurring pitch: ' + readable + '.' + (eventData.retroactive ? ' (back-fill)' : '') + ' ' + REFRESH_HINT);
+        const advance = (result === 'won') ? ' — advanced to Stage 7.'
+                      : (result === 'lost') ? ' — marked Lost.'
+                      : '';
+        toast('Saved. Recurring pitch: ' + readable + '.' + advance + (eventData.retroactive ? ' (back-fill)' : ''));
       } else if (n === 8) {
         // 2026-07-20 rewrite. Two save modes, decided from current state:
         //   1) Attempt-only  — user just picked Reached/No answer on the
@@ -5301,15 +5382,17 @@
             notes:    notes || null
           };
           if (attNumber === 3 && textSent !== null) attemptEvent.text_sent = textSent;
-          await sb('customer_actions', {
+          const attName8 = 'first_check_in_attempt_' + attNumber;
+          const respAtt8 = await sb('customer_actions', {
             method: 'POST',
             body: JSON.stringify({
               customer_id: c.customer_id,
-              stage_name:  'first_check_in_attempt_' + attNumber,
+              stage_name:  attName8,
               event_data:  attemptEvent,
               logged_by:   loggedBy()
             })
           });
+          mirrorActionLocally(c, attName8, attemptEvent, Array.isArray(respAtt8) ? respAtt8[0] : null);
         }
 
         // Branch 2: close-out row.
@@ -5329,7 +5412,7 @@
             notes:           notes || null
           };
           if (shouldFlagRetroactive(c, 8, 'first_check_in')) eventData.retroactive = true;
-          await sb('customer_actions', {
+          const respCo8 = await sb('customer_actions', {
             method: 'POST',
             body: JSON.stringify({
               customer_id: c.customer_id,
@@ -5338,6 +5421,8 @@
               logged_by:   loggedBy()
             })
           });
+          mirrorActionLocally(c, 'first_check_in', eventData, Array.isArray(respCo8) ? respCo8[0] : null);
+          advanceStageLocally(c, 'first_check_in');
         }
 
         // Toast wording.
@@ -5362,7 +5447,7 @@
           notes:          read('notes') || null
         };
         if (shouldFlagRetroactive(c, 9, 'second_check_in')) eventData.retroactive = true;
-        await sb('customer_actions', {
+        const resp9 = await sb('customer_actions', {
           method: 'POST',
           body: JSON.stringify({
             customer_id: c.customer_id,
@@ -5371,13 +5456,18 @@
             logged_by:   loggedBy()
           })
         });
-        toast('Saved. Second check-in logged.' + (eventData.retroactive ? ' (back-fill)' : '') + ' ' + REFRESH_HINT);
+        mirrorActionLocally(c, 'second_check_in', eventData, Array.isArray(resp9) ? resp9[0] : null);
+        advanceStageLocally(c, 'second_check_in');
+        toast('Saved. Second check-in logged — customer is Retained.' + (eventData.retroactive ? ' (back-fill)' : ''));
       } else {
         toast('Nothing to save on this stage.', true);
         throw new Error('unsavable stage');
       }
       markCardClean(n);
       closePanel();
+      // Re-render the visible tab so pipeline pills + card ownership badges
+      // reflect the optimistic advancement immediately.
+      renderTab();
     } catch (err) {
       console.error(err);
       toast('Save failed — ' + err.message, true);
