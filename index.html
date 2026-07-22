@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260722T125708">
+<meta name="hc-build-id" content="20260722T130259">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -4257,13 +4257,14 @@
         ) + '</div>';
     }).join('');
 
-    const followupBlock = followupVisible ? (
-      '<div data-s4-block="followups" style="margin-top:12px">' +
+    // Always render the followup block; visibility is CSS-driven so
+    // refreshStage4Blocks can show/hide when Result changes (before save).
+    const followupBlock =
+      '<div data-s4-block="followups" style="margin-top:12px;display:' + (followupVisible ? '' : 'none') + '">' +
         '<div class="stage-hint" style="border-top:1px dashed var(--border);padding-top:12px">— Follow-ups (3-day cadence) —</div>' +
         '<div class="stage-hint" style="font-size:11px;color:var(--text-muted);margin-top:-4px">Warm-lead nurture. Won / Lost escalates immediately. 3 follow-ups without a decision auto-Lost.</div>' +
         '<div class="pitch-tracker" style="margin-top:10px">' + followupTracker + '</div>' +
-      '</div>'
-    ) : '';
+      '</div>';
 
     return {
       locked: terminalPopulated,   // Edit unlocks; attempts row remains interactive via its own scope
@@ -4334,14 +4335,18 @@
     if (hint) hint.style.display = show ? '' : 'none';
   }
 
-  // Toggle Stage 4\'s Won / Lost conditional blocks when Result changes.
+  // Toggle Stage 4\'s Won / Lost conditional blocks AND the Follow-ups
+  // block when Result changes. Follow-ups appear as soon as Jaylee picks
+  // Estimate sent or Pending response so she can see what comes next.
   function refreshStage4Blocks(result) {
     const bd = bodyEl.querySelector('[data-stage-body="4"]');
     if (!bd) return;
     const wonBlock  = bd.querySelector('[data-s4-block="won"]');
     const lostBlock = bd.querySelector('[data-s4-block="lost"]');
+    const fuBlock   = bd.querySelector('[data-s4-block="followups"]');
     if (wonBlock)  wonBlock.style.display  = (result === 'won')  ? '' : 'none';
     if (lostBlock) lostBlock.style.display = (result === 'lost') ? '' : 'none';
+    if (fuBlock)   fuBlock.style.display   = (result === 'estimate_sent' || result === 'pending_response') ? '' : 'none';
   }
 
   // ---- Stage 5: HCP auto (first recurring visit)
