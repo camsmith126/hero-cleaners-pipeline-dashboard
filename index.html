@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260722T142124">
+<meta name="hc-build-id" content="20260722T142530">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -2827,21 +2827,36 @@
   }
 
   function tenureDaysOf(c) {
-    // Tenure = days since they became recurring. Fall back to first_rec_visit
-    // then first_visit if became_recurring_at isn't set (grandfathered).
+    // Tenure = time as a recurring customer. Start = became_recurring_at
+    // (fallback first_rec_visit / first_visit for grandfathered).
+    // End = today for Active/Retained; last_rec_visit for Lost so the
+    // tenure freezes at how long they WERE a customer rather than
+    // continuing to grow after they left.
     const iso = c.became_recurring_at || c.first_rec_visit || c.first_visit;
     if (!iso) return null;
-    const d = parseIsoDate(iso);
-    if (!d) return null;
-    return Math.max(0, Math.round((todayDate() - d) / 86400000));
+    const start = parseIsoDate(iso);
+    if (!start) return null;
+    const ps = c.pipeline_stage || {};
+    const isLost = ps.lost || ps.current_stage === 'Lost';
+    let end = todayDate();
+    if (isLost && c.last_rec_visit) {
+      const lrv = parseIsoDate(c.last_rec_visit);
+      if (lrv) end = lrv;
+    }
+    return Math.max(0, Math.round((end - start) / 86400000));
   }
 
+  // 2026-07-22 (Cam): format tenure as "Xy Nmo" for anything past a year.
+  // A 13-month tenure reads as "1y 1mo" instead of "13mo" — easier to scan.
   function tenureLabel(days) {
     if (days == null) return '—';
-    if (days < 14)   return days + 'd';
-    if (days < 60)   return Math.round(days / 7) + 'w';
-    if (days < 730)  return Math.round(days / 30) + 'mo';
-    return (days / 365).toFixed(1) + 'y';
+    if (days < 14)  return days + 'd';
+    if (days < 60)  return Math.round(days / 7) + 'w';
+    const totalMonths = Math.round(days / 30);
+    if (totalMonths < 12) return totalMonths + 'mo';
+    const years = Math.floor(totalMonths / 12);
+    const months = totalMonths % 12;
+    return months === 0 ? years + 'y' : years + 'y ' + months + 'mo';
   }
 
   // 2026-07-19 (Cam): status per check-in step.
