@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260722T142530">
+<meta name="hc-build-id" content="20260722T142939">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -2775,7 +2775,8 @@
   // pipeline stage they're at. Halee tracks each through 4 check-ins.
   // The check-in mechanics (attempts, notes, side panel) ship in Phase 3;
   // this is the table with visual check-in status boxes.
-  const ROSTER_SORT_KEY = 'hc:pipeline:v1:roster_sort';
+  const ROSTER_SORT_KEY = 'hc:pipeline:v1:roster_sort';        // legacy (retained)
+  const ROSTER_LOST_SORT_KEY = 'hc:pipeline:v1:roster_lost_sort';
   const ROSTER_FILTER_KEY = 'hc:pipeline:v1:roster_filter';
 
   function rosterCustomers() {
@@ -2998,16 +2999,23 @@
     const setText = function(id, v) { const el = document.getElementById(id); if (el) el.textContent = String(v); };
     setText('tabCountRoster', '(' + rows.length + ')');
 
-    // Sort state (persistent). Default: name ascending.
-    let sort = { col: 'name', dir: 'asc' };
-    try {
-      const stored = localStorage.getItem(ROSTER_SORT_KEY);
-      if (stored) sort = JSON.parse(stored);
-    } catch (_) {}
-    // Filter state (persistent). Free-text search across name + frequency.
+    // Per-section sort state (Cam 2026-07-22): Retained and Lost tables
+    // sort independently. Each has its own localStorage key. Free-text
+    // filter stays shared across all three sections.
+    const loadSort = function(key, defaultCol) {
+      let s = { col: defaultCol, dir: 'asc' };
+      try {
+        const stored = localStorage.getItem(key);
+        if (stored) s = JSON.parse(stored);
+      } catch (_) {}
+      return s;
+    };
+    let retainedSort = loadSort(ROSTER_SORT_KEY, 'name');
+    let lostSort     = loadSort(ROSTER_LOST_SORT_KEY, 'first_rec');  // == last_rec_visit column
     let filter = '';
     try { filter = localStorage.getItem(ROSTER_FILTER_KEY) || ''; } catch (_) {}
 
+    // Apply free-text filter first (shared across sections).
     const filtered = rows.filter(function(c){
       if (!filter) return true;
       const q = filter.toLowerCase();
@@ -3015,21 +3023,29 @@
           || (c.frequency || '').toLowerCase().indexOf(q) >= 0;
     });
 
-    const val = function(c, col) {
+    // Row value extractor for sorting. For the Lost table the 'first_rec'
+    // column actually renders last_rec_visit, so we swap the value source
+    // when the sort belongs to the lost section.
+    const val = function(c, col, isLostSection) {
       if (col === 'name')      return (c.display_name || '').toLowerCase();
       if (col === 'frequency') return c.frequency || '';
       if (col === 'price')     return c.rate || 0;
-      if (col === 'first_rec') return c.first_rec_visit || c.became_recurring_at || '';
+      if (col === 'first_rec') return isLostSection
+                                 ? (c.last_rec_visit || '')
+                                 : (c.first_rec_visit || c.became_recurring_at || '');
       if (col === 'tenure')    return tenureDaysOf(c) || 0;
       if (col === 'checkins')  return checkinProgressScore(c);
       return '';
     };
-    filtered.sort(function(a, b){
-      const va = val(a, sort.col), vb = val(b, sort.col);
-      if (va < vb) return sort.dir === 'asc' ? -1 : 1;
-      if (va > vb) return sort.dir === 'asc' ? 1 : -1;
-      return 0;
-    });
+    const sortRows = function(arr, sort, isLostSection) {
+      return arr.slice().sort(function(a, b){
+        const va = val(a, sort.col, isLostSection);
+        const vb = val(b, sort.col, isLostSection);
+        if (va < vb) return sort.dir === 'asc' ? -1 : 1;
+        if (va > vb) return sort.dir === 'asc' ? 1 : -1;
+        return 0;
+      });
+    };
 
     const headers = [
       ['name',      'Customer'],
@@ -3039,16 +3055,8 @@
       ['tenure',    'Tenure'],
       ['checkins',  'Check-ins'],
     ];
-    const headHtml = '<tr>' + headers.map(function(h){
-      const arrow = sort.col === h[0] ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : '';
-      const cls = 'roster-th' + (sort.col === h[0] ? ' active' : '');
-      return '<th class="' + cls + '" data-sort-col="' + h[0] + '">' + esc(h[1]) + arrow + '</th>';
-    }).join('') + '</tr>';
-
-    // 2026-07-19: split filtered rows into two sections.
-    //   New Converts (top)   — recurring + first_rec_visit set + check-in 1
-    //                          not yet reached AND not grandfathered
-    //   Established (bottom) — everyone else on the roster
+    // Split filtered rows into New Converts (unchanged) and Retained
+    // (Established). Each downstream table applies its own sort.
     const newConverts = filtered.filter(isNewConvert);
     const established = filtered.filter(function(c){ return !isNewConvert(c); });
 
@@ -3094,11 +3102,10 @@
     // renderPipelinePill + renderNewConvertCard now live at top-level so both
     // the Roster and New Customers tabs can share them (see below).
 
-    const tableHtml = function(rowsIn, emptyMsg, rowFn, lastColHead, colOverrides) {
-      // Same 6-column head but the last column label differs per section
-      // ("Check-ins" for retained, "Lost" for lost). colOverrides is a
-      // {colId: newLabel} map for arbitrary column relabeling
-      // (e.g. Lost section swaps First recurring → Last recurring visit).
+    const tableHtml = function(rowsIn, emptyMsg, rowFn, lastColHead, colOverrides, sectionSort, sectionKey) {
+      // sectionKey identifies which section this table belongs to so its
+      // header clicks update the right sort state. sectionSort is the
+      // sort state to render arrows for and sort-order the rows by.
       const overrides = colOverrides || {};
       const localHeaders = headers.map(function(h){
         if (h[0] === 'checkins' && lastColHead) return ['checkins', lastColHead];
@@ -3106,9 +3113,9 @@
         return h;
       });
       const localHeadHtml = '<tr>' + localHeaders.map(function(h){
-        const arrow = sort.col === h[0] ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : '';
-        const cls = 'roster-th' + (sort.col === h[0] ? ' active' : '');
-        return '<th class="' + cls + '" data-sort-col="' + h[0] + '">' + esc(h[1]) + arrow + '</th>';
+        const arrow = sectionSort.col === h[0] ? (sectionSort.dir === 'asc' ? ' ▲' : ' ▼') : '';
+        const cls = 'roster-th' + (sectionSort.col === h[0] ? ' active' : '');
+        return '<th class="' + cls + '" data-sort-col="' + h[0] + '" data-sort-section="' + sectionKey + '">' + esc(h[1]) + arrow + '</th>';
       }).join('') + '</tr>';
       const body = rowsIn.length
         ? rowsIn.map(rowFn).join('')
@@ -3215,16 +3222,19 @@
         'Recurring customers Halee tracks through 4 ongoing check-ins. Sort by First recurring to prioritize newer ones.' +
       '</div>' +
       tableHtml(
-        established,
+        sortRows(established, retainedSort, false),
         (filter ? 'No retained customers match your filter.' : 'Nobody on the retained roster yet.'),
         establishedRowHtml,
-        'Check-ins'
+        'Check-ins',
+        null,
+        retainedSort,
+        'retained'
       ) +
 
       // Lost this year — customers we had on the roster during the current
       // calendar year who have since left. Same shape as Retained except
       // First recurring → Last recurring visit, and the Check-ins column
-      // renders as a Lost badge.
+      // renders as a Lost badge. Independent sort.
       (function(){
         const lostRows = lostThisYearCohort().filter(function(c){
           if (!filter) return true;
@@ -3232,26 +3242,32 @@
           return (c.display_name || '').toLowerCase().indexOf(q) >= 0
               || (c.frequency || '').toLowerCase().indexOf(q) >= 0;
         });
+        const sortedLost = sortRows(lostRows, lostSort, true);
         return '<h3 class="roster-section-head" style="margin-top:32px">Lost <span class="tab-count">' + lostRows.length + '</span></h3>' +
           '<div class="roster-section-help">' +
-            'Recurring customers we\'ve lost this year. Sorted by most-recent last-recurring visit.' +
+            'Recurring customers we\'ve lost this year. Sort by any column independently of Retained above.' +
           '</div>' +
           tableHtml(
-            lostRows,
+            sortedLost,
             (filter ? 'No lost customers match your filter.' : 'No lost recurring customers yet this year.'),
             lostRowHtml,
             'Status',
-            {'first_rec': 'Last recurring visit'}
+            {'first_rec': 'Last recurring visit'},
+            lostSort,
+            'lost'
           );
       })();
 
-    // Sort header clicks.
+    // Sort header clicks — route by section to keep Retained + Lost sorts independent.
     container.querySelectorAll('.roster-th').forEach(function(th){
       th.addEventListener('click', function(){
         const col = th.getAttribute('data-sort-col');
-        if (sort.col === col) sort.dir = (sort.dir === 'asc') ? 'desc' : 'asc';
-        else { sort.col = col; sort.dir = 'asc'; }
-        try { localStorage.setItem(ROSTER_SORT_KEY, JSON.stringify(sort)); } catch(_){}
+        const section = th.getAttribute('data-sort-section');
+        const stateKey = section === 'lost' ? ROSTER_LOST_SORT_KEY : ROSTER_SORT_KEY;
+        const s = section === 'lost' ? lostSort : retainedSort;
+        if (s.col === col) s.dir = (s.dir === 'asc') ? 'desc' : 'asc';
+        else { s.col = col; s.dir = 'asc'; }
+        try { localStorage.setItem(stateKey, JSON.stringify(s)); } catch(_){}
         renderRosterTab(container);
       });
     });
