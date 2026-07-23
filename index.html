@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260723T155529">
+<meta name="hc-build-id" content="20260723T155615">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -704,6 +704,10 @@
   .cal-chip.followup      { background: #A78BFA; color: #1E1B4B; }   /* lavender — warm-lead follow-up */
   .cal-chip.checkin1      { background: #10B981; }   /* light green — first check-in, persistent on today */
   .cal-chip.checkin2      { background: #059669; }   /* green — 30-day second check-in */
+  /* Intro-clean lifecycle states (Cam 2026-07-23). Declared AFTER the
+     newjob/newjob-move rules so the state wins the specificity tie. */
+  .cal-chip.clean-done     { background: #16A34A; }   /* green ✓ — clean completed */
+  .cal-chip.clean-canceled { background: #9CA3AF; text-decoration: line-through; opacity: 0.8; }
   .cal-chip:hover { opacity: 0.85; }
   /* Group list rows (categorized customer lists) */
   .group-row {
@@ -2639,7 +2643,11 @@
             kindClass = 'followup';
             chipLabel = 'Follow-up · ' + firstName;
           }
-          return '<div class="cal-chip ' + kindClass + '" data-open-cid="' + esc(c.customer_id) + '" ' +
+          // Synthesized live-event chips have no customer record yet — no
+          // panel to open, so no data-open-cid (clickable after the next
+          // pipeline refresh absorbs them).
+          const cidAttr = c.customer_id ? ' data-open-cid="' + esc(c.customer_id) + '"' : '';
+          return '<div class="cal-chip ' + kindClass + '"' + cidAttr + ' ' +
                  'title="' + esc(chipLabel) + '">' +
                  esc(chipLabel) + '</div>';
         }).join('');
@@ -2661,6 +2669,8 @@
         'Color key: ' +
           '<span class="cal-chip onboarding" style="display:inline-block;padding:2px 6px;font-size:10px">Onboarding call</span> = red · ' +
           '<span class="cal-chip newjob" style="display:inline-block;padding:2px 6px;font-size:10px">Intro clean</span> teal · ' +
+          '<span class="cal-chip clean-done" style="display:inline-block;padding:2px 6px;font-size:10px">✓ Completed</span> green · ' +
+          '<span class="cal-chip clean-canceled" style="display:inline-block;padding:2px 6px;font-size:10px">Canceled</span> struck · ' +
           '<span class="cal-chip newjob-move" style="display:inline-block;padding:2px 6px;font-size:10px">Move In/Out</span> orange · ' +
           '<span class="cal-chip pitch-active" style="display:inline-block;padding:2px 6px;font-size:10px">Pitch</span> purple (lands the day after their clean) · ' +
           '<span class="cal-chip followup" style="display:inline-block;padding:2px 6px;font-size:10px">Follow-up</span> lavender. ' +
