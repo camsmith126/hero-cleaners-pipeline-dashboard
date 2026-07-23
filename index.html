@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260723T143352">
+<meta name="hc-build-id" content="20260723T153010">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -699,7 +699,6 @@
      read her calendar at a glance. Onboarding calls always red (action
      today), pitch preview amber (heads-up), pitch active dark purple. */
   .cal-chip.onboarding    { background: #DC2626; }   /* red — call today */
-  .cal-chip.pitch-preview { background: #D97706; }   /* amber — pitch tomorrow */
   .cal-chip.pitch-active  { background: #6D28D9; }   /* deep purple — pitch due */
   .cal-chip.followup      { background: #A78BFA; color: #1E1B4B; }   /* lavender — warm-lead follow-up */
   .cal-chip.checkin1      { background: #10B981; }   /* light green — first check-in, persistent on today */
@@ -1292,7 +1291,7 @@
     <h1>Hero Cleaners — Customer Pipeline</h1>
     <div class="subtitle">
       Phase 3 · focus tabs · Halee + Jaylee interactive · click any card to log an action ·
-      generated 2026-07-23T14:33:51.811927 · snapshot date 2026-07-23 ·
+      generated 2026-07-23T15:14:40.959626 · snapshot date 2026-07-23 ·
       <a href="https://camsmith126.github.io/hero-cleaners-residential-dashboard/" style="color:#C5CBD3">← residential dashboard</a>
     </div>
   </div>
@@ -2475,8 +2474,9 @@
     //                    task until Jaylee logs the call). Red.
     //   • clean        — Stage 1/2/3 customer\'s scheduled first clean. Teal
     //                    (or orange for Move In/Out).
-    //   • pitch-preview— Stage 1-4 customer, day-after-first-clean. Amber.
     //   • pitch-active — Stage 4 customer, actionDueDate. Deep purple.
+    //                    (pitch-preview retired 2026-07-23 — redundant with
+    //                    the clean chip + the fixed day-after rule.)
     //   • first-recurring — Stage 5 customer, first_rec_visit. (Rare on this
     //                    tab now — most Stage 7s already excluded by isNewConvert.)
     // Chip entries are objects: {c, kind}.
@@ -2497,12 +2497,10 @@
       // First-clean chip — on the actual scheduled clean date.
       if (cs === 1 || cs === 2 || cs === 3) pushChip(cleanDate, {c: c, kind: 'clean'});
 
-      // Recurring-pitch preview chip — day-after-first-clean for Stages 1-4.
-      // Stage 4 gets the ACTIVE pitch chip (below) via actionDueDate instead.
-      if (cs >= 1 && cs <= 4 && cleanDate) {
-        const p = new Date(cleanDate); p.setDate(p.getDate() + 1);
-        pushChip(rollSundayForward(p), {c: c, kind: 'pitch-preview'});
-      }
+      // (Pitch-preview chip removed 2026-07-23, Cam: the teal Intro-clean
+      // chip already marks the clean day, and pitch = day-after-clean is a
+      // fixed rule — the amber preview doubled up with the purple active
+      // chip for stage-4 customers and earned its deletion.)
 
       // Active pitch chip — Stage 4, on actionDueDate (day-after-clean or
       // day-after-last-attempt). Suppressed during the 7-day quiet-wait
@@ -2554,9 +2552,6 @@
             const jt = c.next_scheduled_job_type || c.first_visit_job_type;
             kindClass = newJobKindFor(jt);
             chipLabel = shortJobTypeLabel(jt) + ' · ' + firstName;
-          } else if (entry.kind === 'pitch-preview') {
-            kindClass = 'pitch-preview';
-            chipLabel = 'Recurring pitch · ' + firstName;
           } else if (entry.kind === 'pitch-active') {
             kindClass = 'pitch-active';
             chipLabel = 'Recurring pitch · ' + firstName;
@@ -2590,8 +2585,7 @@
           '<span class="cal-chip onboarding" style="display:inline-block;padding:2px 6px;font-size:10px">Onboarding call</span> = red · ' +
           '<span class="cal-chip newjob" style="display:inline-block;padding:2px 6px;font-size:10px">Intro clean</span> teal · ' +
           '<span class="cal-chip newjob-move" style="display:inline-block;padding:2px 6px;font-size:10px">Move In/Out</span> orange · ' +
-          '<span class="cal-chip pitch-preview" style="display:inline-block;padding:2px 6px;font-size:10px">Pitch preview</span> amber · ' +
-          '<span class="cal-chip pitch-active" style="display:inline-block;padding:2px 6px;font-size:10px">Pitch due</span> purple · ' +
+          '<span class="cal-chip pitch-active" style="display:inline-block;padding:2px 6px;font-size:10px">Pitch</span> purple (lands the day after their clean) · ' +
           '<span class="cal-chip followup" style="display:inline-block;padding:2px 6px;font-size:10px">Follow-up</span> lavender. ' +
         'Onboarding calls repeat on TODAY until logged — Jaylee should reach out daily until she connects.' +
       '</div>' +
