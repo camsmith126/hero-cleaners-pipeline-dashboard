@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260723T153503">
+<meta name="hc-build-id" content="20260723T154435">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -254,8 +254,9 @@
     font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 10px;
     white-space: nowrap;
   }
-  .live-event-row.cancel .live-event-verb { background: #FEE2E2; color: #991B1B; }
-  .live-event-row.booked .live-event-verb { background: #DCFCE7; color: #14532D; }
+  .live-event-row.cancel  .live-event-verb { background: #FEE2E2; color: #991B1B; }
+  .live-event-row.booked  .live-event-verb { background: #DCFCE7; color: #14532D; }
+  .live-event-row.resched .live-event-verb { background: #FEF3C7; color: #92400E; }
   .roster-table {
     width: 100%; border-collapse: separate; border-spacing: 0;
     background: #fff; border: 1px solid var(--border); border-radius: 8px;
@@ -2611,32 +2612,80 @@
       ? lostCusts.map(renderNewConvertCard).join('')
       : '<div class="group-empty" style="margin:8px 24px 16px">Nobody lost yet from the current cohort.</div>';
 
-    // Live HCP strip (Phase 2, 2026-07-23): today's cancellations + new
-    // bookings straight from webhooks, ~1-minute latency. Cancellations
-    // first — they're the save-the-customer window. Rows link to the
-    // customer panel when the HCP id matches a known customer.
+    // Live HCP strip (Phase 2, 2026-07-23): today's cancellations, new
+    // bookings, and reschedules straight from webhooks, ~1-minute latency.
+    //
+    // One HCP action fires a BURST of events (a single booking produced
+    // job.created + job.scheduled + job.appointment.scheduled +
+    // job.appointment.rescheduled + job.updated within 3 minutes, learned
+    // from the first real events). So: group by hcp_job_id, collapse each
+    // burst to ONE row, and inherit the customer name across the group —
+    // appointment.* events carry no customer, which is what rendered as
+    // "Unknown" before. Rows that still can't resolve a name are stored in
+    // the table but hidden here (nothing Jaylee can act on from "Unknown").
     const liveStrip = (function(){
       if (!LIVE_EVENTS.length) return '';
-      const cancels  = LIVE_EVENTS.filter(function(e){ return /cancel|delet/i.test(e.event_type || ''); });
-      const bookings = LIVE_EVENTS.filter(function(e){ return /created|scheduled/i.test(e.event_type || ''); });
-      if (!cancels.length && !bookings.length) return '';
-      const row = function(e, cls, verb){
-        const c = e.hcp_customer_id ? CUST_BY_ID[e.hcp_customer_id] : null;
-        const when = new Date(e.received_at);
+      // Group events per job (fallback: own row id so ungrouped events
+      // still render individually if they somehow lack a job id).
+      const groups = Object.create(null);
+      LIVE_EVENTS.forEach(function(e){
+        const key = e.hcp_job_id || ('evt_' + e.id);
+        (groups[key] = groups[key] || []).push(e);
+      });
+      const rows = [];
+      Object.keys(groups).forEach(function(key){
+        const evts = groups[key];
+        const types = evts.map(function(e){ return (e.event_type || '').toLowerCase(); });
+        // Category precedence: a canceled job shows ONLY as canceled; a
+        // fresh booking that got tweaked still shows as one New booking;
+        // a reschedule with no booking sibling = an existing job moved.
+        let cls, verb;
+        if (types.some(function(t){ return /cancel|delet/.test(t); })) {
+          cls = 'cancel'; verb = 'Canceled';
+        } else if (types.some(function(t){ return t === 'job.created' || t === 'job.scheduled' || t === 'job.appointment.scheduled'; })) {
+          cls = 'booked'; verb = 'New booking';
+        } else if (types.some(function(t){ return t === 'job.appointment.rescheduled'; })) {
+          cls = 'resched'; verb = 'Rescheduled';
+        } else {
+          return;   // only updated/completed/paid in this group — not strip-worthy
+        }
+        // Name + details: first non-null across the burst.
+        const pickVal = function(field){
+          for (let i = 0; i < evts.length; i++) if (evts[i][field]) return evts[i][field];
+          return null;
+        };
+        const name = pickVal('display_name');
+        if (!name) return;   // unresolvable — keep out of Jaylee's view
+        rows.push({
+          cls: cls, verb: verb, name: name,
+          hcp_customer_id: pickVal('hcp_customer_id'),
+          job_type: pickVal('job_type'),
+          scheduled_start: pickVal('scheduled_start'),
+          received_at: evts.map(function(e){ return e.received_at; }).sort()[0],
+        });
+      });
+      if (!rows.length) return '';
+      const order = {cancel: 0, resched: 1, booked: 2};
+      rows.sort(function(a, b){
+        if (order[a.cls] !== order[b.cls]) return order[a.cls] - order[b.cls];
+        return (b.received_at || '').localeCompare(a.received_at || '');
+      });
+      const rowHtml = rows.map(function(r){
+        const c = r.hcp_customer_id ? CUST_BY_ID[r.hcp_customer_id] : null;
+        const when = new Date(r.received_at);
         const timeTxt = isNaN(when.getTime()) ? '' : when.toLocaleTimeString(undefined, {hour:'numeric', minute:'2-digit'});
-        const sched = e.scheduled_start
-          ? ' · visit ' + fmtDateShort(String(e.scheduled_start).slice(0,10)) : '';
-        return '<div class="live-event-row ' + cls + '"' +
+        const sched = r.scheduled_start
+          ? ' · visit ' + fmtDateShort(String(r.scheduled_start).slice(0,10)) : '';
+        return '<div class="live-event-row ' + r.cls + '"' +
                (c ? ' data-open-cid="' + esc(c.customer_id) + '"' : '') + '>' +
-          '<span class="live-event-verb">' + verb + '</span>' +
-          '<strong>' + esc(e.display_name || 'Unknown') + '</strong>' +
-          '<span class="txt-muted">' + esc(e.job_type || '') + esc(sched) + (timeTxt ? ' · ' + esc(timeTxt) : '') + '</span>' +
+          '<span class="live-event-verb">' + r.verb + '</span>' +
+          '<strong>' + esc(r.name) + '</strong>' +
+          '<span class="txt-muted">' + esc(r.job_type || '') + esc(sched) + (timeTxt ? ' · ' + esc(timeTxt) : '') + '</span>' +
         '</div>';
-      };
+      }).join('');
       return '<div class="live-events-card">' +
         '<div class="live-events-head">⚡ Live from HCP <span class="txt-muted" style="font-weight:400">(last 24h · updates within a minute)</span></div>' +
-        cancels.map(function(e){ return row(e, 'cancel', 'Canceled'); }).join('') +
-        bookings.map(function(e){ return row(e, 'booked', 'New booking'); }).join('') +
+        rowHtml +
       '</div>';
     })();
 
