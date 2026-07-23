@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260723T112913">
+<meta name="hc-build-id" content="20260723T113850">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -238,6 +238,24 @@
   .roster-cards-wrap { padding: 4px 24px 16px; }
   .roster-cards-wrap .card { cursor: pointer; }
   .roster-cards-wrap .card:hover { box-shadow: 0 2px 8px rgba(23,30,38,0.06); }
+  /* Live HCP webhook strip (Phase 2, 2026-07-23) */
+  .live-events-card {
+    margin: 12px 24px 8px; padding: 10px 14px; border-radius: 6px;
+    background: #F8FAFC; border: 1px solid #E2E8F0;
+  }
+  .live-events-head { font-weight: 700; font-size: 13px; margin-bottom: 6px; }
+  .live-event-row {
+    display: flex; gap: 10px; align-items: baseline; padding: 5px 4px;
+    border-top: 1px solid #EEF2F6; font-size: 13px;
+  }
+  .live-event-row[data-open-cid] { cursor: pointer; }
+  .live-event-row[data-open-cid]:hover { background: #F1F5F9; }
+  .live-event-verb {
+    font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 10px;
+    white-space: nowrap;
+  }
+  .live-event-row.cancel .live-event-verb { background: #FEE2E2; color: #991B1B; }
+  .live-event-row.booked .live-event-verb { background: #DCFCE7; color: #14532D; }
   .roster-table {
     width: 100%; border-collapse: separate; border-spacing: 0;
     background: #fff; border: 1px solid var(--border); border-radius: 8px;
@@ -1274,7 +1292,7 @@
     <h1>Hero Cleaners — Customer Pipeline</h1>
     <div class="subtitle">
       Phase 3 · focus tabs · Halee + Jaylee interactive · click any card to log an action ·
-      generated 2026-07-23T11:29:12.925122 · snapshot date 2026-07-23 ·
+      generated 2026-07-23T11:29:49.012225 · snapshot date 2026-07-23 ·
       <a href="https://camsmith126.github.io/hero-cleaners-residential-dashboard/" style="color:#C5CBD3">← residential dashboard</a>
     </div>
   </div>
@@ -1483,15 +1501,25 @@
   //     need those live, extend hydrateFromSupabase.
   let __supabasePollBusy = false;
   let __lastSupabaseHydrate = 0;
+  // Live HCP webhook events (Phase 2, 2026-07-23). Filled by the poll from
+  // the hcp_events table (written by the hcp-events Edge Function). The
+  // New Customers tab renders today's cancellations + bookings from this.
+  let LIVE_EVENTS = [];
 
   async function hydrateFromSupabase() {
     if (!SB.enabled) return;
     if (__supabasePollBusy) return;
     __supabasePollBusy = true;
     try {
-      const [actions, profiles] = await Promise.all([
+      // hcp_events: last 24h, capped, newest first. Fail-soft — the table
+      // may not exist in older environments; treat errors as empty.
+      const sinceIso = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+      const [actions, profiles, events] = await Promise.all([
         sb('customer_actions?select=id,customer_id,stage_name,event_data,logged_at,logged_by&order=logged_at.asc&limit=10000'),
         sb('customer_profiles?select=*&limit=10000'),
+        sb('hcp_events?select=id,received_at,event_type,hcp_job_id,hcp_customer_id,display_name,job_type,scheduled_start'
+           + '&received_at=gte.' + encodeURIComponent(sinceIso)
+           + '&order=received_at.desc&limit=50').catch(function(){ return []; }),
       ]);
 
       // Merge actions per customer.
@@ -1526,6 +1554,15 @@
             changed = true;
           }
         }
+      }
+
+      // Live-event change detection: newest id wins.
+      const evList = Array.isArray(events) ? events : [];
+      const evKey = evList.length + '|' + ((evList[0] || {}).id || '');
+      const curEvKey = LIVE_EVENTS.length + '|' + ((LIVE_EVENTS[0] || {}).id || '');
+      if (evKey !== curEvKey) {
+        LIVE_EVENTS = evList;
+        changed = true;
       }
 
       __lastSupabaseHydrate = Date.now();
@@ -2580,12 +2617,43 @@
       ? lostCusts.map(renderNewConvertCard).join('')
       : '<div class="group-empty" style="margin:8px 24px 16px">Nobody lost yet from the current cohort.</div>';
 
+    // Live HCP strip (Phase 2, 2026-07-23): today's cancellations + new
+    // bookings straight from webhooks, ~1-minute latency. Cancellations
+    // first — they're the save-the-customer window. Rows link to the
+    // customer panel when the HCP id matches a known customer.
+    const liveStrip = (function(){
+      if (!LIVE_EVENTS.length) return '';
+      const cancels  = LIVE_EVENTS.filter(function(e){ return /cancel|delet/i.test(e.event_type || ''); });
+      const bookings = LIVE_EVENTS.filter(function(e){ return /created|scheduled/i.test(e.event_type || ''); });
+      if (!cancels.length && !bookings.length) return '';
+      const row = function(e, cls, verb){
+        const c = e.hcp_customer_id ? CUST_BY_ID[e.hcp_customer_id] : null;
+        const when = new Date(e.received_at);
+        const timeTxt = isNaN(when.getTime()) ? '' : when.toLocaleTimeString(undefined, {hour:'numeric', minute:'2-digit'});
+        const sched = e.scheduled_start
+          ? ' · visit ' + fmtDateShort(String(e.scheduled_start).slice(0,10)) : '';
+        return '<div class="live-event-row ' + cls + '"' +
+               (c ? ' data-open-cid="' + esc(c.customer_id) + '"' : '') + '>' +
+          '<span class="live-event-verb">' + verb + '</span>' +
+          '<strong>' + esc(e.display_name || 'Unknown') + '</strong>' +
+          '<span class="txt-muted">' + esc(e.job_type || '') + esc(sched) + (timeTxt ? ' · ' + esc(timeTxt) : '') + '</span>' +
+        '</div>';
+      };
+      return '<div class="live-events-card">' +
+        '<div class="live-events-head">⚡ Live from HCP <span class="txt-muted" style="font-weight:400">(last 24h · updates within a minute)</span></div>' +
+        cancels.map(function(e){ return row(e, 'cancel', 'Canceled'); }).join('') +
+        bookings.map(function(e){ return row(e, 'booked', 'New booking'); }).join('') +
+      '</div>';
+    })();
+
     container.innerHTML =
       '<div class="roster-header">' +
         '<div class="focus-title">New Customers</div>' +
         '<div class="focus-subtitle">' + custs.length + ' customer' + (custs.length !== 1 ? 's' : '') +
           ' currently in stages 1-4. Once they hit their first recurring visit, they graduate to the Roster tab for Halee to pick up.</div>' +
       '</div>' +
+
+      liveStrip +
 
       calendarHtml +
 
@@ -2601,8 +2669,8 @@
       '</div>' +
       '<div class="roster-cards-wrap">' + lostCardsHtml + '</div>';
 
-    // Calendar chips + cards both open the detail panel.
-    container.querySelectorAll('.cal-chip[data-open-cid]').forEach(function(chip){
+    // Calendar chips + live-event rows + cards all open the detail panel.
+    container.querySelectorAll('.cal-chip[data-open-cid], .live-event-row[data-open-cid]').forEach(function(chip){
       chip.addEventListener('click', function(ev){
         ev.stopPropagation();
         openPanel(chip.getAttribute('data-open-cid'));
