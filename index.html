@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260724T143814">
+<meta name="hc-build-id" content="20260724T145143">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1296,7 +1296,7 @@
     <h1>Hero Cleaners — Customer Pipeline</h1>
     <div class="subtitle">
       Phase 3 · focus tabs · Halee + Jaylee interactive · click any card to log an action ·
-      generated 2026-07-24T14:26:36.080791 · snapshot date 2026-07-24 ·
+      generated 2026-07-24T14:47:01.006658 · snapshot date 2026-07-24 ·
       <a href="https://camsmith126.github.io/hero-cleaners-residential-dashboard/" style="color:#C5CBD3">← residential dashboard</a>
     </div>
   </div>
@@ -2586,7 +2586,11 @@
       // classifier will auto-Lost them on day 8, no chip needed until then.
       if (cs === 4 && !inStage4QuietWait(c)) {
         const p = actionDueDate(c);
-        pushChip(p, {c: c, kind: 'pitch-active'});
+        // Overdue pitches FOLLOW TO TODAY until resolved (Cam 2026-07-24)
+        // — same persistence pattern as onboarding calls. Without this,
+        // an unresolved pitch (attempt logged, no Result picked) sat in a
+        // grayed past cell where nobody looks (Melanie + Jan, 7/22).
+        pushChip((p && p < today) ? today : p, {c: c, kind: 'pitch-active'});
       }
 
       // Follow-up chip (Cam 2026-07-22) — Stage 4 customer with Estimate sent
@@ -2595,7 +2599,8 @@
       // follow-up" from "cold-call attempt" at a glance.
       if (cs === 4) {
         const fu = followupDueDate(c);
-        if (fu) pushChip(fu, {c: c, kind: 'followup'});
+        // Overdue follow-ups also follow to today (same rule as pitches).
+        if (fu) pushChip((fu < today) ? today : fu, {c: c, kind: 'followup'});
       }
 
       // First-recurring chip — Stage 5.
