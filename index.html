@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260724T150725">
+<meta name="hc-build-id" content="20260724T151107">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1518,15 +1518,20 @@
     if (__supabasePollBusy) return;
     __supabasePollBusy = true;
     try {
-      // hcp_events: last 30 days (the calendar overlays — completed ✓ /
-      // canceled strikethrough — need to persist beyond the strip's 24h
-      // view). Fail-soft — treat errors as empty.
+      // hcp_events: last 30 days, FILTERED to the event types the UI
+      // actually consumes — bookings, cancels, completions. Without the
+      // filter, the constant job.updated/on_my_way/started echo (~300
+      // events in 2 days) crowded real bookings out of the row limit
+      // (Amanda + Nate vanished from the strip on day 2). Fail-soft.
       const sinceIso = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+      const evFilter = 'or=(event_type.in.(job.created,job.scheduled,job.appointment.scheduled,job.completed),'
+                     + 'event_type.ilike.*cancel*,event_type.ilike.*delet*)';
       const [actions, profiles, events] = await Promise.all([
         sb('customer_actions?select=id,customer_id,stage_name,event_data,logged_at,logged_by&order=logged_at.asc&limit=10000'),
         sb('customer_profiles?select=*&limit=10000'),
         sb('hcp_events?select=id,received_at,event_type,hcp_job_id,hcp_customer_id,display_name,job_type,scheduled_start'
            + '&received_at=gte.' + encodeURIComponent(sinceIso)
+           + '&' + evFilter
            + '&order=received_at.desc&limit=300').catch(function(){ return []; }),
       ]);
 
