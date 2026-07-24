@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260724T060029">
+<meta name="hc-build-id" content="20260724T065822">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -2745,14 +2745,41 @@
     // "Unknown" before. Rows that still can't resolve a name are stored in
     // the table but hidden here (nothing Jaylee can act on from "Unknown").
     const liveStrip = (function(){
-      if (!LIVE_EVENTS.length) return '';
-      // The strip shows the last 24h only (the wider 30-day fetch feeds
-      // the calendar chip overlays below, not this feed).
+      // ---- Lost-recurring notifications (Cam 2026-07-23) ----
+      // Sourced from the ROSTER CLASSIFICATION, not raw cancel events — a
+      // single canceled visit doesn't mean a lost customer, so this only
+      // fires when someone genuinely dropped off the roster. 7-day window
+      // so the alert doesn't vanish the same day it appears.
+      const VPM_STRIP = {'3x per Week': 13, '2x per Week': 52*2/12, 'Weekly': 52/12,
+                         'Bi-Weekly': 26/12, 'Every 3 Weeks': 52/3/12, 'Monthly': 1};
+      const lostCut = new Date(todayDate()); lostCut.setDate(lostCut.getDate() - 7);
+      const lostRows = CUSTOMERS.filter(function(c){
+        if (!c.first_rec_visit) return false;
+        const ps = c.pipeline_stage || {};
+        const offRoster = !c.is_recurring || c.state === 'Lost' || ps.lost;
+        if (!offRoster) return false;
+        const left = parseIsoDate(c.last_rec_visit);
+        return left && left >= lostCut;
+      }).sort(function(a, b){
+        return (b.last_rec_visit || '').localeCompare(a.last_rec_visit || '');
+      }).map(function(c){
+        const mrr = (c.rate || 0) * (VPM_STRIP[c.frequency] || 0);
+        const sr = c.state_reason || '';
+        const rm = sr.match(/Cancellation:\s*(.+)/);
+        return {
+          customer_id: c.customer_id,
+          name: c.display_name || '?',
+          date: (c.last_rec_visit || '').slice(0, 10),
+          mrr: mrr,
+          reason: c.state === 'Paused' ? 'Taking a break' : (rm ? rm[1].trim() : null),
+        };
+      });
+
+      // ---- New bookings from the live event feed (last 24h) ----
       const stripCutoff = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
       const stripEvents = LIVE_EVENTS.filter(function(e){
         return (e.received_at || '') >= stripCutoff;
       });
-      if (!stripEvents.length) return '';
       // Group events per job (fallback: own row id so ungrouped events
       // still render individually if they somehow lack a job id).
       const groups = Object.create(null);
@@ -2792,12 +2819,20 @@
           received_at: evts.map(function(e){ return e.received_at; }).sort()[0],
         });
       });
-      if (!rows.length) return '';
-      const order = {cancel: 0, resched: 1, booked: 2};
+      if (!rows.length && !lostRows.length) return '';
       rows.sort(function(a, b){
-        if (order[a.cls] !== order[b.cls]) return order[a.cls] - order[b.cls];
         return (b.received_at || '').localeCompare(a.received_at || '');
       });
+      const lostHtml = lostRows.map(function(r){
+        return '<div class="live-event-row cancel" data-open-cid="' + esc(r.customer_id) + '">' +
+          '<span class="live-event-verb">Lost recurring</span>' +
+          '<strong>' + esc(r.name) + '</strong>' +
+          '<span class="txt-muted">' +
+            (r.reason ? esc(r.reason) + ' · ' : '') +
+            '−$' + Math.round(r.mrr) + '/mo · last visit ' + esc(fmtDateShort(r.date)) +
+          '</span>' +
+        '</div>';
+      }).join('');
       const rowHtml = rows.map(function(r){
         const c = r.hcp_customer_id ? CUST_BY_ID[r.hcp_customer_id] : null;
         const when = new Date(r.received_at);
@@ -2812,7 +2847,8 @@
         '</div>';
       }).join('');
       return '<div class="live-events-card">' +
-        '<div class="live-events-head">⚡ Live from HCP <span class="txt-muted" style="font-weight:400">(last 24h · updates within a minute)</span></div>' +
+        '<div class="live-events-head">⚡ Live from HCP <span class="txt-muted" style="font-weight:400">(bookings last 24h · lost recurring last 7 days)</span></div>' +
+        lostHtml +
         rowHtml +
       '</div>';
     })();
