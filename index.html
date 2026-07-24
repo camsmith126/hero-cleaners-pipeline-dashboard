@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260724T145143">
+<meta name="hc-build-id" content="20260724T150542">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -2780,8 +2780,10 @@
         };
       });
 
-      // ---- New bookings from the live event feed (last 24h) ----
-      const stripCutoff = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+      // ---- New bookings from the live event feed (this week) ----
+      // Cam 2026-07-24: widened from 24h — bookings stay visible for the
+      // whole current week (Monday-anchored, matching the calendar).
+      const stripCutoff = weekStart(todayDate()).toISOString();
       const stripEvents = LIVE_EVENTS.filter(function(e){
         return (e.received_at || '') >= stripCutoff;
       });
@@ -2852,7 +2854,7 @@
         '</div>';
       }).join('');
       return '<div class="live-events-card">' +
-        '<div class="live-events-head">⚡ Live from HCP <span class="txt-muted" style="font-weight:400">(bookings last 24h · lost recurring last 7 days)</span></div>' +
+        '<div class="live-events-head">⚡ Live from HCP <span class="txt-muted" style="font-weight:400">(bookings this week · lost recurring last 7 days)</span></div>' +
         lostHtml +
         rowHtml +
       '</div>';
