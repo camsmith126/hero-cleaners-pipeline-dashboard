@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260724T142636">
+<meta name="hc-build-id" content="20260724T143814">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -3369,6 +3369,35 @@
       const idx = daysBetween(due, wkStart);
       byDay[idx].push(c);
     });
+    // First-recurring lifecycle (Cam 2026-07-24) — same treatment as
+    // Jaylee's intro-clean chips: the chip stays on its scheduled date and
+    // flips to a green ✓ once completed, instead of vanishing when the
+    // customer graduates out of New Recurring. Live cancel/complete events
+    // overlay the scheduled chips ahead of the 20-min refresh.
+    const evCancelByCust = Object.create(null);
+    const evCompleteByCust = Object.create(null);
+    LIVE_EVENTS.forEach(function(e){
+      const cid = e.hcp_customer_id;
+      if (!cid) return;
+      const t = (e.event_type || '').toLowerCase();
+      if (/cancel|delet/.test(t)) evCancelByCust[cid] = e;
+      else if (t === 'job.completed') evCompleteByCust[cid] = e;
+    });
+    const evAppliesTo = function(e, chipDate){
+      if (!e) return false;
+      const d = String(e.scheduled_start || '').slice(0, 10);
+      return !d || d === isoOf(chipDate);
+    };
+    const byDayFirstRecDone = days.map(function(){ return []; });
+    CUSTOMERS.forEach(function(c){
+      if (!c.is_recurring || c.established) return;
+      const ps = c.pipeline_stage || {};
+      if (ps.lost || ps.current_stage === 'Lost') return;
+      const frv = parseIsoDate(c.first_rec_visit);
+      if (!frv || frv > today) return;             // future ones = scheduled chip above
+      if (frv < wkStart || frv > windowEnd) return;
+      byDayFirstRecDone[daysBetween(frv, wkStart)].push(c);
+    });
     // Second check-in pills (Cam 2026-07-22): pinned to the scheduled clean
     // closest to but never before first_rec_visit + 30 days. Target date is
     // computed server-side (extract_daily._compute_second_checkin_targets);
@@ -3420,10 +3449,26 @@
         const isPast = !isToday && d < today;
         const chips = byDay[dayIdx].map(function(c){
           const cs = (c.pipeline_stage || {}).current_stage;
-          const kind = chipKindFor(cs, isToday, 'halee', c);
-          const chipLabel = shortLabelFor(c, cs, 'halee');
+          let kind = chipKindFor(cs, isToday, 'halee', c);
+          let chipLabel = shortLabelFor(c, cs, 'halee');
+          // Live-event lifecycle overlay on scheduled first-recurring chips.
+          if (cs === 5) {
+            if (evAppliesTo(evCancelByCust[c.customer_id], d)) {
+              kind += ' clean-canceled';
+            } else if (evAppliesTo(evCompleteByCust[c.customer_id], d)) {
+              kind += ' clean-done';
+              chipLabel = '✓ ' + chipLabel;
+            }
+          }
           return '<div class="cal-chip ' + kind + '" data-open-cid="' + esc(c.customer_id) + '" ' +
                  'title="' + esc(chipLabel) + '">' +
+                 esc(chipLabel) + '</div>';
+        }).join('') +
+        byDayFirstRecDone[dayIdx].map(function(c){
+          const first = (c.display_name || 'customer').split(/\s+/)[0];
+          const chipLabel = '✓ First recurring · ' + first;
+          return '<div class="cal-chip visit clean-done" data-open-cid="' + esc(c.customer_id) + '" ' +
+                 'title="' + esc(chipLabel + ' — completed; customer is on the roster') + '">' +
                  esc(chipLabel) + '</div>';
         }).join('') +
         (isToday ? checkin1Today.map(function(c){
@@ -3454,6 +3499,7 @@
       '<div class="roster-section-help">' +
         'Rolling 30 days for the New Recurring customers below (first-time cleans + first recurring visits). ' +
         'Jaylee sells them on recurring and schedules the future cleans; Halee picks it up from here. ' +
+        'First recurring visits stay on their date and turn <span style="color:#16A34A;font-weight:600">green ✓</span> once completed. ' +
         '<span style="color:#10B981;font-weight:600">Light green</span> = first check-in, sits on today until logged. ' +
         '<span style="color:#059669;font-weight:600">Green</span> = second check-in, pinned to the clean closest to 30 days after their first recurring visit. ' +
         'Click any chip to open that customer\'s panel.' +
