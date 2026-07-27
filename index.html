@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260727T155729">
+<meta name="hc-build-id" content="20260727T155929">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -4972,14 +4972,27 @@
         '</div>'
       : '';
 
+    // "Replied by text" (Cam 2026-07-27): after the fallback text, the
+    // customer often answers WITH real info (Megan Keay). This completes
+    // the check-in as reached-by-text and saves whatever fields the
+    // thread gave us — partial answers allowed. Seeded from the latest
+    // close-out so re-opens show the state.
+    const textReplySeed = (d.reached_via === 'text_reply') ? 'true' : '';
+    const textReplyBlock =
+      '<div class="stage-field-row"><span class="field-label">Replied by text?</span><span class="field-value">' +
+        segmented('__s7_text_reply', [['true','Yes — they answered by text']], textReplySeed) +
+      '</span></div>' +
+      '<div class="stage-hint" style="margin-top:-4px">If they responded to the text, pick Yes and fill in whatever the messages told you below — partial answers are fine. Saves the check-in as reached by text.</div>';
+
     const attemptsBlock =
       '<div id="s8_attempts_block_' + esc(c.customer_id) + '" data-s8-block="attempts" style="display:' + (met === 'true' ? 'none' : '') + '">' +
         '<div class="stage-hint">Log up to 3 phone attempts to reach them. Each Reached/No answer saves independently — come back later for the next attempt.</div>' +
         '<div class="pitch-tracker" style="margin-top:10px">' + trackerRows + '</div>' +
         textSentBlock8 +
         (attemptsClosed && !anyReached
-          ? '<div class="pitch-warn"><strong>3 no-answers logged.</strong> Save below to close this check-in as unreached, or fill Vibe/Frequency/Time if you eventually reached them by text/email.</div>'
+          ? '<div class="pitch-warn"><strong>3 no-answers logged.</strong> Save below to close this check-in as unreached — or if they replied to the text, pick "Replied by text" below and fill what you can.</div>'
           : '') +
+        textReplyBlock +
       '</div>';
 
     // 2026-07-20 (Cam): always show the question stack — fill in what you have,
@@ -5031,7 +5044,8 @@
         '<input type="hidden" data-stage-field="6" data-field="att_answered" value=""/>' +
         '<input type="hidden" data-stage-field="6" data-field="att_number" value="' + nextAttempt + '"/>' +
         '<input type="hidden" data-stage-field="6" data-field="text_sent" value=""/>' +
-        '<input type="hidden" data-stage-field="6" data-field="cancelling" value=""/>'
+        '<input type="hidden" data-stage-field="6" data-field="cancelling" value=""/>' +
+        '<input type="hidden" data-stage-field="6" data-field="text_reply" value="' + esc(textReplySeed) + '"/>'
     };
   }
 
@@ -5541,6 +5555,7 @@
       '__s7_freq':         {stage: 6, field: 'frequency_check',      type: 'str'},
       '__s7_time':         {stage: 6, field: 'time_check',           type: 'str'},
       '__s7_cancel':       {stage: 6, field: 'cancelling',           type: 'str'},
+      '__s7_text_reply':   {stage: 6, field: 'text_reply',           type: 'str'},
       // Stage 6 (was 8): second check-in.
       '__s8_contact':      {stage: 7, field: 'contact_method',       type: 'str'},
       '__s8_reached':      {stage: 7, field: 'reached',              type: 'bool'},
@@ -6236,16 +6251,19 @@
         // Branch 2: close-out row.
         if (shouldCloseOut) {
           const reachedVia = (met === true) ? 'in_person'
+                           : textReply ? 'text_reply'
                            : (attAnswered === true) ? ('attempt_' + attNumber)
                            : anyPriorReached ? 'earlier_attempt'
                            : attemptThreeUnreached ? 'unreached_after_text'
                            : 'unreached';
+          // Save whatever fields are filled (2026-07-27) — a text thread
+          // gives partial answers, and partial truth beats empty fields.
           const eventData = {
             met_in_person:   met,
-            vibe:            hasQuestions ? vibe : null,
-            cleaner_fit:     hasQuestions ? cleanerFit : null,
-            frequency_check: hasQuestions ? freq : null,
-            time_check:      hasQuestions ? timeCheck : null,
+            vibe:            vibe || null,
+            cleaner_fit:     cleanerFit || null,
+            frequency_check: freq || null,
+            time_check:      timeCheck || null,
             reached_via:     reachedVia,
             notes:           notes || null
           };
@@ -6285,6 +6303,8 @@
         let msg;
         if (cancelling && shouldCloseOut) {
           msg = 'Saved. First check-in closed — customer marked Lost (cancelling service).';
+        } else if (textReply && shouldCloseOut) {
+          msg = 'Saved. First check-in completed from their text reply.';
         } else if (freshAttempt && shouldCloseOut) {
           msg = attemptThreeUnreached
             ? 'Saved. Attempt 3 logged + check-in auto-closed as unreached (text sent).'
