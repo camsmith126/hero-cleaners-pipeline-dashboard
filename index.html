@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260727T155048">
+<meta name="hc-build-id" content="20260727T155729">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1296,7 +1296,7 @@
     <h1>Hero Cleaners — Customer Pipeline</h1>
     <div class="subtitle">
       Phase 3 · focus tabs · Halee + Jaylee interactive · click any card to log an action ·
-      generated 2026-07-27T15:37:05.465685 · snapshot date 2026-07-27 ·
+      generated 2026-07-27T15:57:28.899875 · snapshot date 2026-07-27 ·
       <a href="https://camsmith126.github.io/hero-cleaners-residential-dashboard/" style="color:#C5CBD3">← residential dashboard</a>
     </div>
   </div>
@@ -6181,12 +6181,17 @@
         // the check-in as unreached in the same save (Cam 2026-07-21). No
         // need to make Halee hit save twice.
         const attemptThreeUnreached = (attNumber === 3 && attAnswered === false && textSent === true);
+        // 2026-07-27 (Cam): "Replied by text" — Halee sent the fallback
+        // text and the customer answered with real info (Megan Keay).
+        // Completes the check-in with whatever fields the text thread
+        // gave us — partial answers allowed, unlike the phone path.
+        const textReply = (read('text_reply') === 'true');
 
         // Decide branches. A "cancelling" pick always closes out — the
         // outcome is known even if the question stack wasn\'t filled.
         const freshAttempt = (attAnswered !== null && !attemptsClosed && met !== true);
-        const canCloseOut  = (met === true) || anyReached || closingUnreached || attemptThreeUnreached || cancelling;
-        const shouldCloseOut = canCloseOut && (hasQuestions || closingUnreached || attemptThreeUnreached || cancelling);
+        const canCloseOut  = (met === true) || anyReached || closingUnreached || attemptThreeUnreached || cancelling || textReply;
+        const shouldCloseOut = canCloseOut && (hasQuestions || closingUnreached || attemptThreeUnreached || cancelling || textReply);
 
         // Guard: nothing to save.
         if (!freshAttempt && !shouldCloseOut) {
