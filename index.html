@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260727T153644">
+<meta name="hc-build-id" content="20260727T155048">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1296,7 +1296,7 @@
     <h1>Hero Cleaners — Customer Pipeline</h1>
     <div class="subtitle">
       Phase 3 · focus tabs · Halee + Jaylee interactive · click any card to log an action ·
-      generated 2026-07-27T15:36:44.735609 · snapshot date 2026-07-27 ·
+      generated 2026-07-27T15:37:05.465685 · snapshot date 2026-07-27 ·
       <a href="https://camsmith126.github.io/hero-cleaners-residential-dashboard/" style="color:#C5CBD3">← residential dashboard</a>
     </div>
   </div>
@@ -3059,7 +3059,15 @@
     if (c.established) return false;
     const frv = parseIsoDate(c.first_rec_visit);
     if (!frv) return false;
-    return frv > todayDate();
+    if (frv > todayDate()) return true;   // first recurring still upcoming
+    // 2026-07-27 (Cam): a convert stays in New Recurring until they
+    // complete ALL 8 steps — Megan Keay was mid-check-ins (stage 7) and
+    // wrongly fell into Retained the moment her first visit passed.
+    // Retained = stage 8 only. The 90-day bound keeps pre-system converts
+    // (who never had pipeline check-ins) in Retained where they belong.
+    if (daysBetween(todayDate(), frv) > 90) return false;
+    const cs = (c.pipeline_stage || {}).current_stage;
+    return typeof cs === 'number' && cs >= 5 && cs < 8;
   }
 
   function tenureDaysOf(c) {
@@ -3393,6 +3401,12 @@
     });
     const byDay = days.map(function(){ return []; });
     newConverts.forEach(function(c){
+      // Stage 6/7 converts live on the calendar via the dedicated
+      // check-in pills below — skip the generic due-date chip so they
+      // don't double up now that post-visit converts stay in this group
+      // until stage 8 (2026-07-27).
+      const cs = (c.pipeline_stage || {}).current_stage;
+      if (cs === 6 || cs === 7) return;
       const due = actionDueDate(c);
       if (!due || due < wkStart || due > windowEnd) return;
       const idx = daysBetween(due, wkStart);
@@ -3550,7 +3564,8 @@
 
       '<h3 class="roster-section-head">New Recurring <span class="tab-count">' + newConverts.length + '</span></h3>' +
       '<div class="roster-section-help">' +
-        'Just sold on recurring — first recurring clean still upcoming. They flow through the 10-step pipeline (Jaylee: stages 1-6, Halee: stages 7-10). Click a card to open the 10-stage detail panel. Once they hit Retained (stage 10), they graduate to the Retained section below with Check-in 1 auto-marked.' +
+        'New recurring customers working through the 8-step process — they stay here until BOTH check-ins are done (step 8 = Retained). ' +
+        'Click a card to open the full 8-stage detail panel with their history.' +
       '</div>' +
       '<div class="roster-cards-wrap">' +
         (newConverts.length
