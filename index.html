@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260727T155929">
+<meta name="hc-build-id" content="20260727T160814">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1055,21 +1055,35 @@
     display: block; font-size: 12px; font-weight: 600;
     color: var(--hero-black); margin-bottom: 6px;
   }
+  /* Pill-style option groups (Cam 2026-07-27) — the old joined-box design
+     wrapped into a broken-looking grid on long labels. Independent pills
+     wrap cleanly, and the selected pill is unmistakable (solid red). */
   .segmented {
-    display: inline-flex; flex-wrap: wrap;
-    border: 1px solid var(--slate-lite);
-    border-radius: 6px; overflow: hidden; background: #fff;
+    display: flex; flex-wrap: wrap; gap: 6px;
     max-width: 100%;
   }
   .segmented button {
-    padding: 8px 14px; background: #fff; border: 0;
-    border-right: 1px solid var(--slate-lite);
+    padding: 7px 14px; background: #fff;
+    border: 1.5px solid var(--slate-lite); border-radius: 999px;
     cursor: pointer; font-size: 13px; color: var(--text);
     font-family: inherit;
+    transition: background .12s ease, border-color .12s ease;
   }
-  .segmented button:last-child { border-right: 0; }
-  .segmented button.on { background: var(--hero-red); color: #fff; }
+  .segmented button.on {
+    background: var(--hero-red); border-color: var(--hero-red);
+    color: #fff; font-weight: 600;
+  }
   .segmented button:hover:not(.on) { background: #F3F4F6; }
+  /* "Not captured" — the honest-unknown pill. Visually secondary (dashed,
+     muted) so it never competes with real answers; gray when selected so
+     the record clearly reads "consciously unknown", not "picked red". */
+  .segmented button[data-value="not_captured"] {
+    color: var(--text-muted); border-style: dashed;
+  }
+  .segmented button[data-value="not_captured"].on {
+    background: #6B7280; border-color: #6B7280; border-style: solid;
+    color: #fff;
+  }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .chip {
     padding: 6px 12px; border: 1px solid var(--slate-lite);
@@ -5000,18 +5014,18 @@
     const questionsBlock =
       '<div id="s8_questions_block_' + esc(c.customer_id) + '" data-s8-block="questions">' +
         '<div class="stage-field-row"><span class="field-label">Vibe</span><span class="field-value">' +
-          segmented('__s7_vibe', [['straightforward','Straightforward'],['friendly','Friendly'],['reserved','Reserved']], vibe) +
+          segmented('__s7_vibe', [['straightforward','Straightforward'],['friendly','Friendly'],['reserved','Reserved'],['not_captured','Not captured']], vibe) +
         '</span></div>' +
-        '<div class="stage-hint" style="margin-top:-4px">How they engaged — helps shape how we serve them.</div>' +
+        '<div class="stage-hint" style="margin-top:-4px">How they engaged — helps shape how we serve them. "Not captured" = the conversation didn\'t tell you (common on text replies) — mark it honestly rather than guessing.</div>' +
         '<div class="stage-field-row"><span class="field-label">Cleaner</span><span class="field-value">' +
-          segmented('__s7_cleaner', [['great','Great fit'],['fine','Fine'],['concerns','Concerns']], cleanerFit) +
+          segmented('__s7_cleaner', [['great','Great fit'],['fine','Fine'],['concerns','Concerns'],['not_captured','Not captured']], cleanerFit) +
         '</span></div>' +
         '<div class="stage-hint" style="margin-top:-4px">' + (cleanerName ? 'About ' + esc(cleanerName) + ' — g' : 'G') + 'reat fit = wants them specifically. Concerns = mentioned issues; capture details in Notes below.</div>' +
         '<div class="stage-field-row"><span class="field-label">Frequency check</span><span class="field-value">' +
-          segmented('__s7_freq', [['more','Wants more frequent'],['right','Current cadence works'],['less','Would like less frequent']], freq) +
+          segmented('__s7_freq', [['more','Wants more frequent'],['right','Current cadence works'],['less','Would like less frequent'],['not_captured','Not captured']], freq) +
         '</span></div>' +
         '<div class="stage-field-row"><span class="field-label">Time per clean</span><span class="field-value">' +
-          segmented('__s7_time', [['more','Wants more time'],['right','Current time is right'],['less','Could use less time']], timeCheck) +
+          segmented('__s7_time', [['more','Wants more time'],['right','Current time is right'],['less','Could use less time'],['not_captured','Not captured']], timeCheck) +
         '</span></div>' +
         // 2026-07-22 (audit): "they want to stop" needs a real outcome — it
         // used to have nowhere to go except the Notes box.
