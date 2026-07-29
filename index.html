@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260729T124445">
+<meta name="hc-build-id" content="20260729T125416">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -257,6 +257,9 @@
   .live-event-row.cancel  .live-event-verb { background: #FEE2E2; color: #991B1B; }
   .live-event-row.booked  .live-event-verb { background: #DCFCE7; color: #14532D; }
   .live-event-row.resched .live-event-verb { background: #FEF3C7; color: #92400E; }
+  /* Booking with no date yet — job sits in HCP as "needs scheduling" and
+     cannot reach the calendar until it gets one (Cam 2026-07-29). */
+  .live-event-row .needs-sched { color: #B45309; font-weight: 600; }
   .roster-table {
     width: 100%; border-collapse: separate; border-spacing: 0;
     background: #fff; border: 1px solid var(--border); border-radius: 8px;
@@ -1323,7 +1326,7 @@
     <h1>Hero Cleaners — Customer Pipeline</h1>
     <div class="subtitle">
       Phase 3 · focus tabs · Halee + Jaylee interactive · click any card to log an action ·
-      generated 2026-07-29T12:33:52.010152 · snapshot date 2026-07-29 ·
+      generated 2026-07-29T12:54:16.404988 · snapshot date 2026-07-29 ·
       <a href="https://camsmith126.github.io/hero-cleaners-residential-dashboard/" style="color:#C5CBD3">← residential dashboard</a>
     </div>
   </div>
@@ -2899,6 +2902,15 @@
         const timeTxt = isNaN(when.getTime()) ? '' : when.toLocaleTimeString(undefined, {hour:'numeric', minute:'2-digit'});
         const sched = r.scheduled_start
           ? ' · visit ' + fmtDateShort(String(r.scheduled_start).slice(0,10)) : '';
+        // 2026-07-29 (Cam): a booking with NO date is a job sitting in HCP
+        // as "needs scheduling" — it can\'t reach the calendar until someone
+        // gives it a date. Say so in amber instead of silently omitting the
+        // visit date (Jesse Henry + a duplicate Hannah Kimball job looked
+        // like strip/calendar misses when the jobs simply had no date).
+        // Deliberately per-JOB: no snapshot fallback, the customer\'s other
+        // scheduled job must not mask this one\'s missing date.
+        const needsSched = !r.scheduled_start
+          ? ' · <span class="needs-sched">needs scheduling</span>' : '';
         // Job type: prefer the snapshot's CURRENT value over the label the
         // webhook carried at booking time — offices often correct the job
         // type minutes after creating the job, and that correction arrives
@@ -2908,7 +2920,7 @@
                (c ? ' data-open-cid="' + esc(c.customer_id) + '"' : '') + '>' +
           '<span class="live-event-verb">' + r.verb + '</span>' +
           '<strong>' + esc(r.name) + '</strong>' +
-          '<span class="txt-muted">' + esc(jt || '') + esc(sched) + (timeTxt ? ' · ' + esc(timeTxt) : '') + '</span>' +
+          '<span class="txt-muted">' + esc(jt || '') + esc(sched) + needsSched + (timeTxt ? ' · ' + esc(timeTxt) : '') + '</span>' +
         '</div>';
       }).join('');
       return '<div class="live-events-card">' +
