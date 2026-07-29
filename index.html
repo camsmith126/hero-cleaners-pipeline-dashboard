@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260729T123352">
+<meta name="hc-build-id" content="20260729T123535">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -3222,6 +3222,14 @@
 
     const metaBits = [];
     if (isRec && freq) metaBits.push(esc(freq));
+    // 2026-07-29 (Cam): on this dashboard "Lost" means the customer said
+    // no to recurring (or went silent through the full ladder) — the
+    // pipeline\'s call, not the roster state\'s. A never-converted
+    // customer still being pitched can carry a roster state of
+    // Lost/Overdue/At Risk from the cadence ramp; showing that label on
+    // an ACTIVE pitch card contradicts the funnel (Laurie read "Lost"
+    // while sitting in Jaylee\'s queue). Neutral label instead.
+    else if (!isLost && !isRec && state === 'Lost') metaBits.push('No future booked');
     else if (state)    metaBits.push(esc(state));
     if (c.established) metaBits.push('<span class="tag tag-est">grandfathered</span>');
     if (cleaner)       metaBits.push('cleaner: ' + esc(cleaner));
@@ -3796,7 +3804,13 @@
       const cleaner = Array.isArray(c.first_visit_cleaners)
         ? c.first_visit_cleaners.filter(Boolean).join(', ')
         : (c.first_visit_cleaners || '');
-      const meta = [c.frequency || c.state, cleaner ? ('cleaner: ' + cleaner) : '']
+      // Same neutral-label rule as cardHtml (Cam 2026-07-29): an active
+      // pitch candidate must not read "Lost" from the roster-state ramp.
+      const psRow = c.pipeline_stage || {};
+      const rowLost = !!psRow.lost || psRow.current_stage === 'Lost';
+      const stateLabel = (!rowLost && !c.is_recurring && c.state === 'Lost')
+        ? 'No future booked' : c.state;
+      const meta = [c.frequency || stateLabel, cleaner ? ('cleaner: ' + cleaner) : '']
         .filter(Boolean).join(' · ');
       const due = actionDueDate(c);
       let dueStr = '—';
