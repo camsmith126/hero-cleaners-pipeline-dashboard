@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260729T123535">
+<meta name="hc-build-id" content="20260729T124445">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1214,6 +1214,19 @@
   .stage-card-body.locked .segmented button {
     background: #F9FAFB; color: var(--text);
     border-color: var(--border); cursor: default;
+  }
+  /* 2026-07-29 (Cam): the selected pill IS the record — it must keep its
+     color in the locked (read-only) view. The flatten rule above was
+     washing .on down to gray, leaving bold text as the only clue what
+     was picked. Applies to every pill group in every stage form. */
+  .stage-card-body.locked .segmented button.on {
+    background: var(--hero-red); border-color: var(--hero-red); color: #fff;
+  }
+  .stage-card-body.locked .segmented button[data-value="not_captured"].on {
+    background: #6B7280; border-color: #6B7280; color: #fff;
+  }
+  .stage-card-body.locked .chip.on {
+    background: var(--done-soft); border-color: var(--done); color: var(--done);
   }
   /* 2026-07-22 (Cam): the Edit button lives INSIDE .stage-card-body, so the
      locked body\'s pointer-events: none was swallowing its clicks — no way
@@ -4780,12 +4793,9 @@
     const lostD = (lost && lost.event_data) || {};
     const initialResult = won ? 'won' : (lost ? 'lost' : (est ? 'estimate_sent' : (pend ? 'pending_response' : '')));
 
-    let statusChipHtml = '';
-    if (won)       statusChipHtml = '<span class="today-chip" style="background:var(--done)">Won — booked recurring</span>';
-    else if (lost) statusChipHtml = '<span class="today-chip" style="background:var(--lost)">Lost — declined</span>';
-    else if (est)  statusChipHtml = '<span class="today-chip" style="background:var(--slate)">Estimate sent</span>';
-    else if (pend) statusChipHtml = '<span class="today-chip" style="background:var(--slate)">Pending response</span>';
-
+    // (Status-chip echo row removed 2026-07-29, Cam: the selected pill in
+    // the Result group below IS the indicator — it now keeps its color in
+    // the locked view, so a second line restating it was just noise.)
     const freqSelected = winD.frequency || '';
     const startSelected = winD.first_recurring_start_date || '';
     const reasonSelected = lostD.reason || '';
@@ -4884,9 +4894,7 @@
         outcomeRow +
         textSentBlock +
         // Result segmented — always visible so Jaylee can pick when ready.
-        (statusChipHtml
-          ? '<div class="stage-field-row"><span class="field-label">Result</span><span class="field-value">' + statusChipHtml + '</span></div>'
-          : '') +
+        // The selected pill carries the record (colored even when locked).
         '<div class="stage-field-row"><span class="field-label">Result</span><span class="field-value">' +
           segmented('__s4_result',
             [['won','Won — booked recurring'],['lost','Lost — declined'],['estimate_sent','Estimate sent'],['pending_response','Pending response']],
