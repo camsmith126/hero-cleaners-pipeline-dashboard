@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260731T173136">
+<meta name="hc-build-id" content="20260731T173802">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -3020,16 +3020,22 @@
           '<div class="roster-cards-wrap">' + oneOffs.map(renderNewConvertCard).join('') + '</div>'
         : '') +
 
-      // Not Qualified (Cam 2026-07-31) — same shape as Move Out Cleans.
+      // Not Qualified (Cam 2026-07-31). ALWAYS rendered, even when empty —
+      // Cam wants the bucket visible so Jaylee knows the option exists and
+      // can see at a glance that nobody's in it (unlike Move Out Cleans,
+      // which hides when empty).
+      '<h3 class="roster-section-head" style="margin-top:32px">Not Qualified <span class="tab-count">' + notQualified.length + '</span></h3>' +
+      '<div class="roster-section-help">' +
+        'Jaylee marked these <strong>not qualified for recurring</strong> on the seed-planted step — they told her they only wanted the one clean. ' +
+        'No pitch, no tasks, and they don\'t count against conversion (never pitched is not the same as lost). ' +
+        'Their cleans still show on the calendar above. If one ever books recurring service they rejoin the pipeline automatically.' +
+      '</div>' +
       (notQualified.length
-        ? '<h3 class="roster-section-head" style="margin-top:32px">Not Qualified <span class="tab-count">' + notQualified.length + '</span></h3>' +
-          '<div class="roster-section-help">' +
-            'Jaylee marked these <strong>not qualified for recurring</strong> on the seed-planted step — they told her they only wanted the one clean. ' +
-            'No pitch, no tasks, and they don\'t count against conversion (never pitched is not the same as lost). ' +
-            'Their cleans still show on the calendar above. If one ever books recurring service they rejoin the pipeline automatically.' +
-          '</div>' +
-          '<div class="roster-cards-wrap">' + notQualified.map(renderNewConvertCard).join('') + '</div>'
-        : '') +
+        ? '<div class="roster-cards-wrap">' + notQualified.map(renderNewConvertCard).join('') + '</div>'
+        : '<div class="group-empty" style="margin:8px 24px 16px">' +
+            'Nobody here yet. When a customer tells Jaylee they only want a one-time clean, ' +
+            'she marks <strong>Qualified for recurring? No</strong> on their First clean step and they land here.' +
+          '</div>') +
 
       '<h3 class="roster-section-head" style="margin-top:32px">Lost <span class="tab-count">' + lostCusts.length + '</span></h3>' +
       '<div class="roster-section-help">' +
