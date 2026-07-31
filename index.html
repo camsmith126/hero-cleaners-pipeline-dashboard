@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260731T164816">
+<meta name="hc-build-id" content="20260731T170036">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1164,6 +1164,18 @@
   .pitch-attempt .pitch-attempt-when { margin-left: auto; font-size: 11px; color: var(--text-muted); }
   .pitch-attempt .pitch-attempt-result.muted { color: var(--text-muted); font-style: italic; }
   .pitch-attempt .segmented button { padding: 5px 10px; font-size: 12px; }
+  /* Per-attempt quick note (Cam 2026-07-31) — sits inline with the
+     Answered / No answer pills on the active attempt row. */
+  .pitch-attempt .pitch-attempt-controls {
+    display: flex; align-items: center; gap: 8px; flex: 1; flex-wrap: wrap;
+  }
+  .pitch-attempt input.attempt-note {
+    flex: 1; min-width: 150px; max-width: 320px;
+    padding: 5px 10px; font-size: 12px;
+  }
+  .pitch-attempt.done .attempt-note-txt {
+    font-weight: 400; font-style: italic; color: var(--text-muted);
+  }
   /* Conditional Won/Lost blocks unlock when Result chip is selected */
   .pitch-conditional {
     background: #F9FAFB;
@@ -4859,7 +4871,8 @@
     }).map(function(a){
       const n = parseInt(a.stage_name.slice(-1), 10);
       const d = a.event_data || {};
-      return {n:n, answered: !!d.answered, outcome: d.outcome || '', logged_at: a.logged_at, logged_by: a.logged_by};
+      return {n:n, answered: !!d.answered, notes: d.notes || '',
+               logged_at: a.logged_at, logged_by: a.logged_by};
     }).sort(function(a,b){ return a.n - b.n; });
 
     // Terminal outcome lookups (Won/Lost/Estimate/Pending).
@@ -4869,43 +4882,38 @@
     const pend  = latestActionFor(c, 'recurring_pitch_pending_response');
     const terminalPopulated = !!(won || lost || est || pend);
 
-    // Attempts close once ANY attempt was reached & pitched OR terminal
-    // outcome logged OR 3 attempts on the books. No more highlighted row.
-    const anyReachedAndPitched = priors.some(function(p){
-      return p.answered && p.outcome === 'reached_and_pitched';
-    });
-    const attemptsClosed = anyReachedAndPitched || terminalPopulated || priors.length >= 3;
+    // 2026-07-31 (Cam): each attempt is INDEPENDENT — Answered / No answer
+    // plus an optional quick note, save, move to the next one. Nothing else.
+    // The per-attempt "Outcome (Reached & pitched / Left VM)" row is gone,
+    // and with it the rule that closed the ladder as soon as someone was
+    // reached: Jaylee keeps logging attempts until she has a RESULT. So the
+    // ladder now closes only on a terminal outcome or 3 attempts used.
+    const attemptsClosed = terminalPopulated || priors.length >= 3;
     const nextAttempt = attemptsClosed ? 0 : Math.min(priors.length + 1, 3);
 
     const trackerRows = [1,2,3].map(function(n){
       const prior = priors.find(function(p){ return p.n === n; });
       if (prior) {
         const lbl = prior.answered ? 'Answered' : 'No answer';
-        const outc = prior.outcome
-          ? ' · ' + (prior.outcome === 'reached_and_pitched' ? 'Reached & pitched' : 'Left VM / text')
-          : '';
         return '<div class="pitch-attempt done"><span class="pitch-attempt-n">Attempt ' + n + '</span>' +
-          '<span class="pitch-attempt-result">✓ ' + esc(lbl) + esc(outc) + '</span>' +
+          '<span class="pitch-attempt-result">✓ ' + esc(lbl) +
+            (prior.notes ? ' <span class="attempt-note-txt">' + esc(prior.notes) + '</span>' : '') +
+          '</span>' +
           '<span class="pitch-attempt-when">' + esc(fmtLogged(prior)) + '</span></div>';
       }
       const isActive = (n === nextAttempt);
-      const inactiveLabel = attemptsClosed
-        ? (anyReachedAndPitched ? 'Not needed — already reached' : 'Not needed')
-        : 'Waiting on attempt ' + (n-1);
+      const inactiveLabel = attemptsClosed ? 'Not needed' : 'Waiting on attempt ' + (n-1);
       return '<div class="pitch-attempt' + (isActive ? ' active' : ' pending') + '">' +
         '<span class="pitch-attempt-n">Attempt ' + n + '</span>' +
         (isActive
-          ? '<span class="pitch-attempt-controls">' + segmented('__s4_answered', [['true','Answered'],['false','No answer']], '') + '</span>'
+          ? '<span class="pitch-attempt-controls">' +
+              segmented('__s4_answered', [['true','Answered'],['false','No answer']], '') +
+              '<input type="text" class="form-input attempt-note" data-stage-field="4" ' +
+                'data-field="attempt_notes" placeholder="Quick note (optional)"/>' +
+            '</span>'
           : '<span class="pitch-attempt-result muted">' + esc(inactiveLabel) + '</span>'
         ) + '</div>';
     }).join('');
-
-    // Attempt-outcome row visible only when the active attempt row is live.
-    const outcomeRow = (nextAttempt > 0)
-      ? '<div class="stage-field-row"><span class="field-label">Outcome (this attempt)</span><span class="field-value">' +
-          segmented('__s4_outcome', [['reached_and_pitched','Reached & pitched'],['left_vm_or_text','Left VM / text']], '') +
-        '</span></div>'
-      : '';
 
     // Text-sent row on active attempt 3 only (fallback text confirmation).
     const textSentBlock = (nextAttempt === 3)
@@ -5028,10 +5036,9 @@
             ? 'Result already logged. Click Edit to change.'
             : (attemptsClosed
                 ? 'Attempts done. Pick a Result below to close this stage.'
-                : 'Log each attempt as Answered / No answer. Once you reach & pitch them, the tracker closes and you pick a Result.')) +
+                : 'Log each attempt on its own: Answered / No answer, an optional quick note, then Save. Keep going until you have a Result.')) +
         '</div>' +
         '<div class="pitch-tracker" style="margin-top:10px">' + trackerRows + '</div>' +
-        outcomeRow +
         textSentBlock +
         // Result segmented — always visible so Jaylee can pick when ready.
         // The selected pill carries the record (colored even when locked).
@@ -5062,7 +5069,6 @@
         '</span></div>' +
         // Hidden mirrors read by saveStage(4).
         '<input type="hidden" data-stage-field="4" data-field="answered" value=""/>' +
-        '<input type="hidden" data-stage-field="4" data-field="outcome" value=""/>' +
         '<input type="hidden" data-stage-field="4" data-field="text_sent" value=""/>' +
         '<input type="hidden" data-stage-field="4" data-field="result" value="' + esc(initialResult) + '"/>' +
         '<input type="hidden" data-stage-field="4" data-field="attempt_number" value="' + nextAttempt + '"/>' +
@@ -5787,7 +5793,6 @@
       // Stage 4 (merged 2026-07-22): recurring pitch attempts + terminal
       // result on one card. All __s4_* keys point at stage 4.
       '__s4_answered':     {stage: 4, field: 'answered',             type: 'bool'},
-      '__s4_outcome':      {stage: 4, field: 'outcome',              type: 'str'},
       '__s4_text_sent':    {stage: 4, field: 'text_sent',            type: 'bool'},
       '__s4_result':       {stage: 4, field: 'result',               type: 'str'},
       '__s4_fu_outcome':   {stage: 4, field: 'fu_outcome',           type: 'str'},
@@ -6229,10 +6234,13 @@
         // in the same save. Notes textarea is shared — its value goes on both
         // rows when both are written (source-of-truth is the terminal on read).
         const answeredNow = readBool('answered');
-        const outcomeNow  = read('outcome');
         const textSentNow = readBool('text_sent');
         const result      = read('result');
         const notes       = read('notes') || '';
+        // Per-attempt note (Cam 2026-07-31) — lives on the attempt row and
+        // is saved on the attempt row only. The shared Notes box below
+        // belongs to the Result.
+        const attemptNotes = read('attempt_notes') || '';
         // Follow-up (Cam 2026-07-22): when Result is estimate_sent or
         // pending_response, Jaylee can log up to 3 follow-ups on a 3-day
         // cadence. Won/Lost picked here escalates by also writing the
@@ -6249,14 +6257,11 @@
           throw new Error('nothing to save on stage 4');
         }
 
-        // 2026-07-22 (audit): reached & pitched REQUIRES a Result. Without
-        // this, an attempt saved with answered=true and no Result left the
-        // customer stuck at Stage 4 with no follow-up trigger and no quiet
-        // wait — only the 45-day fallback would ever close them.
-        if (answeredNow === true && !result) {
-          toast('They were reached — pick a Result (Won / Lost / Estimate sent / Pending response) before saving.', true);
-          throw new Error('reached without result');
-        }
+        // (2026-07-31 Cam: the "reached ⇒ must pick a Result now" block is
+        // gone. Attempts are independent — she can log Answered and save,
+        // and come back for the next attempt. Nothing gets stranded: the
+        // Stage-4 pitch chip follows her to today until a Result is logged,
+        // so an open pitch stays in her face rather than needing a guard.)
 
         // Won/Lost with no prior attempts + short notes: guardrail from
         // Phase 3 fold-in. Notes required ≥10 chars.
@@ -6285,8 +6290,7 @@
         if (freshAttempt && !attExists) {
           const attemptEvent = {
             answered: answeredNow,
-            outcome:  outcomeNow || null,
-            notes:    notes || null,
+            notes:    attemptNotes || null,
           };
           if (attemptN === 3 && textSentNow !== null) attemptEvent.text_sent = textSentNow;
           const respAtt = await sb('customer_actions', {
@@ -6422,8 +6426,8 @@
         } else {
           const tail = (attemptN === 3 && textSentNow === true)
             ? ' 7-day quiet-wait window starts now.'
-            : '';
-          msg = 'Saved. Attempt ' + attemptN + ' logged — card stays at Stage 4.' + tail;
+            : (attemptN < 3 ? ' Attempt ' + (attemptN + 1) + ' is ready when you are.' : '');
+          msg = 'Saved. Attempt ' + attemptN + ' logged.' + tail;
         }
         toast(msg);
       } else if (n === 6) {
