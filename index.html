@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260731T170036">
+<meta name="hc-build-id" content="20260731T170858">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1368,7 +1368,7 @@
     <h1>Hero Cleaners — Customer Pipeline</h1>
     <div class="subtitle">
       Phase 3 · focus tabs · Halee + Jaylee interactive · click any card to log an action ·
-      generated 2026-07-31T16:46:40.584429 · snapshot date 2026-07-31 ·
+      generated 2026-07-31T17:04:54.500855 · snapshot date 2026-07-31 ·
       <a href="https://camsmith126.github.io/hero-cleaners-residential-dashboard/" style="color:#C5CBD3">← residential dashboard</a>
     </div>
   </div>
@@ -1764,7 +1764,7 @@
 
   function requireIdentity() {
     // Phase 3 fold-in: block writes when no identity is set. Called from
-    // every doSave path so provenance is never `unknown` in production.
+    // every save path so provenance is never `unknown` in production.
     // Also highlights the top-right selector so the user knows where to go.
     if (currentIdentity()) return true;
     const wrap = document.querySelector('.identity-picker');
@@ -4079,12 +4079,12 @@
   const closeBtn= document.getElementById('panelClose');
   const cancelBtn = document.getElementById('panelCancel');
 
-  let CURRENT = null;   // { customer, formStage: 'first'|'second'|null, values: {...} }
+  let CURRENT = null;   // { customer, mode: 'detail'|'roster', stageState, saving }
 
   function openPanel(customer_id) {
     const c = CUST_BY_ID[customer_id];
     if (!c) return;
-    CURRENT = {customer: c, formStage: null, values: {}, saving: false, mode: 'detail'};
+    CURRENT = {customer: c, saving: false, mode: 'detail'};
     renderPanel();
     scrim.classList.add('open');
     panel.classList.add('open');
@@ -4098,7 +4098,7 @@
   function openRosterPanel(customer_id, focusStep) {
     const c = CUST_BY_ID[customer_id];
     if (!c) return;
-    CURRENT = {customer: c, formStage: null, values: {}, saving: false, mode: 'roster', focusStep: focusStep || null};
+    CURRENT = {customer: c, saving: false, mode: 'roster', focusStep: focusStep || null};
     renderRosterPanel();
     scrim.classList.add('open');
     panel.classList.add('open');
@@ -5382,321 +5382,17 @@
     };
   }
 
-  // ---- Forms ----
-  const PRIORITY_OPTIONS = [
-    'Bathrooms','Kitchen','Floors','Dusting','Kids\' rooms',
-    'Bedrooms','Baseboards','Windows','Wood surfaces'
-  ];
-
-  function renderFirstCheckInForm(c) {
-    CURRENT.formStage = 'first';
-    // Seed values from existing profile so an edit-in-progress isn't lost.
-    const p = c.customer_profile || {};
-    // intro_method lives on customer_actions.event_data (not on customer_profiles).
-    // Seed from the latest first_check_in action so an edit shows what she picked.
-    const prevAction = (function() {
-      const acts = (c.pipeline_actions || []).filter(function(a){
-        return a.stage_name === 'first_check_in';
-      });
-      acts.sort(function(a,b){ return (b.logged_at || '').localeCompare(a.logged_at || ''); });
-      return acts[0] || null;
-    })();
-    CURRENT.values = {
-      met_customer:       (p.met_customer != null ? !!p.met_customer : null),
-      intro_method:       (prevAction && prevAction.event_data && prevAction.event_data.intro_method) || '',
-      top_priorities:     Array.isArray(p.top_priorities) ? p.top_priorities.slice() : [],
-      specific_requests:  p.specific_requests || '',
-      card_on_file:       (p.card_on_file != null ? !!p.card_on_file : null),
-      home_during_cleans: p.home_during_cleans || '',
-      access_notes:       p.access_notes || '',
-      contact_preference: p.contact_preference || '',
-      notes:              ''
-    };
-    return (
-      '<div id="checkinFormError" class="form-error" style="display:none"></div>' +
-
-      '<div class="form-group">' +
-        '<label class="form-label">Met the customer?</label>' +
-        segmented('met_customer', [['true','Yes'],['false','No']], boolToStr(CURRENT.values.met_customer)) +
-      '</div>' +
-
-      '<div class="form-group">' +
-        '<label class="form-label">Intro method</label>' +
-        segmented('intro_method', [['in_person','In person'],['phone','Phone']], CURRENT.values.intro_method) +
-        '<div class="form-help">How did you first introduce yourself to this customer?</div>' +
-      '</div>' +
-
-      '<div class="section-label">Preferences</div>' +
-      '<div class="form-group">' +
-        '<label class="form-label">Top priorities</label>' +
-        chips('top_priorities', PRIORITY_OPTIONS, CURRENT.values.top_priorities) +
-      '</div>' +
-      '<div class="form-group">' +
-        '<label class="form-label">Specific requests · do-not-miss items</label>' +
-        '<textarea class="form-textarea" data-field="specific_requests">' + esc(CURRENT.values.specific_requests) + '</textarea>' +
-      '</div>' +
-
-      '<div class="section-label">Payment</div>' +
-      '<div class="form-group">' +
-        '<label class="form-label">Card on file?</label>' +
-        segmented('card_on_file', [['true','Yes'],['false','No — need to collect']], boolToStr(CURRENT.values.card_on_file)) +
-      '</div>' +
-
-      '<div class="section-label">Access</div>' +
-      '<div class="form-group">' +
-        '<label class="form-label">Home during cleans?</label>' +
-        segmented('home_during_cleans', [['always','Always home'],['sometimes','Sometimes'],['usually_away','Usually away']], CURRENT.values.home_during_cleans) +
-      '</div>' +
-      '<div class="form-group">' +
-        '<label class="form-label">Access notes</label>' +
-        '<input class="form-input" data-field="access_notes" value="' + esc(CURRENT.values.access_notes) + '"/>' +
-      '</div>' +
-
-      '<div class="section-label">Communication</div>' +
-      '<div class="form-group">' +
-        '<label class="form-label">Preferred contact method</label>' +
-        segmented('contact_preference', [['call','Call'],['text','Text'],['email','Email']], CURRENT.values.contact_preference) +
-      '</div>' +
-
-      '<div class="section-label">Halee\'s notes</div>' +
-      '<div class="form-group">' +
-        '<textarea class="form-textarea" data-field="notes" placeholder="Anything worth remembering for the next visit?"></textarea>' +
-      '</div>'
-    );
-  }
-
-  function renderSecondCheckInForm(c) {
-    CURRENT.formStage = 'second';
-    CURRENT.values = {
-      contact_method: '',   // 'phone' | 'text'
-      reached:        null, // bool
-      going_well:     null, // bool (true = going well, false = concerns)
-      notes:          ''
-    };
-    return (
-      '<div id="checkinFormError" class="form-error" style="display:none"></div>' +
-      '<div class="form-group">' +
-        '<label class="form-label">Contact method</label>' +
-        segmented('contact_method', [['phone','Phone'],['text','Text']], '') +
-      '</div>' +
-      '<div class="form-group">' +
-        '<label class="form-label">Reached them?</label>' +
-        segmented('reached', [['true','Yes'],['false','No']], '') +
-      '</div>' +
-      '<div class="form-group">' +
-        '<label class="form-label">How\'s it going?</label>' +
-        segmented('going_well', [['true','Going well'],['false','Concerns']], '') +
-      '</div>' +
-      '<div class="form-group">' +
-        '<label class="form-label">Notes</label>' +
-        '<textarea class="form-textarea" data-field="notes" placeholder="What she said, red flags, anything to route to Cam/Jaylee"></textarea>' +
-      '</div>'
-    );
-  }
-
-  // ---- Phase 2b: Onboarding call form (stage 2) ----
-  const TYPE_OF_CLEAN_OPTIONS = [
-    ['Business',            'Business'],
-    ['Deep Clean',          'Deep Clean'],
-    ['Move In-Out Clean',   'Move In/Out'],
-    ['Gifted Clean',        'Gifted Clean'],
-    ['Cleaning Plan',       'Cleaning Plan']
-  ];
-
-  function renderOnboardingCallForm(c) {
-    CURRENT.formStage = 'onboarding';
-    CURRENT.values = {
-      contact_method: '',       // 'phone' | 'text'
-      type_of_clean:  '',
-      notes:          ''
-    };
-    return (
-      '<div id="checkinFormError" class="form-error" style="display:none"></div>' +
-      '<div class="form-group">' +
-        '<label class="form-label">Contact method</label>' +
-        segmented('contact_method', [['phone','Phone'],['text','Text']], '') +
-      '</div>' +
-      '<div class="form-group">' +
-        '<label class="form-label">Type of clean</label>' +
-        '<select class="form-input" data-field="type_of_clean">' +
-          '<option value="">— select —</option>' +
-          TYPE_OF_CLEAN_OPTIONS.map(function(o){
-            return '<option value="' + esc(o[0]) + '">' + esc(o[1]) + '</option>';
-          }).join('') +
-        '</select>' +
-      '</div>' +
-      '<div class="form-group">' +
-        '<label class="form-label">Notes (optional)</label>' +
-        '<textarea class="form-textarea" data-field="notes" placeholder="Anything worth remembering — reference to the estimate, red flags, preferences to hand off to the cleaner"></textarea>' +
-      '</div>'
-    );
-  }
-
-  // ---- Phase 2b: Recurring pitch form (stage 5) ----
-  // Composite form: attempts tracker + outcome + result + conditional
-  // Won/Lost/Estimate/Pending fields. Attempts are stored as-you-go so
-  // Jaylee can save an attempt without committing to an outcome.
-  const PITCH_LOST_REASONS = [
-    ['declined_price',           'Declined — price'],
-    ['declined_timing',          'Declined — timing'],
-    ['prefers_other',            'Prefers another provider'],
-    ['not_a_fit',                'Not a fit'],
-    ['unreachable',              'Unreachable after 3 attempts'],
-    ['cancelled_first_clean',    'Cancelled first clean'],
-    ['other',                    'Other (see notes)']
-  ];
-  const PITCH_FREQUENCIES = [
-    ['weekly',    'Weekly'],
-    ['bi-weekly', 'Bi-weekly'],
-    ['monthly',   'Monthly'],
-    ['quarterly', 'Quarterly'],
-    ['other',     'Other']
-  ];
-
-  function priorPitchAttempts(c) {
-    // Returns [{n, answered, outcome, notes, logged_at}] sorted by n.
-    // Reads from customer.pipeline_actions (populated by the daily pipeline).
-    const rows = (c.pipeline_actions || []).filter(function(a){
-      const s = a.stage_name || '';
-      return s === 'recurring_pitch_attempt_1'
-          || s === 'recurring_pitch_attempt_2'
-          || s === 'recurring_pitch_attempt_3';
-    });
-    return rows.map(function(a){
-      const n = parseInt(a.stage_name.slice(-1), 10);
-      const d = a.event_data || {};
-      return {
-        n: n, answered: !!d.answered, outcome: d.outcome || '',
-        notes: d.notes || '', logged_at: a.logged_at, logged_by: a.logged_by
-      };
-    }).sort(function(a,b){ return a.n - b.n; });
-  }
-
-  function renderRecurringPitchForm(c) {
-    CURRENT.formStage = 'pitch';
-    const priors = priorPitchAttempts(c);
-    const nextAttempt = Math.min(priors.length + 1, 3);
-    CURRENT.values = {
-      // Attempt (only relevant if nothing terminal is being logged this save)
-      attempt_answered:  null,
-      attempt_outcome:   '',
-      attempt_notes:     '',
-      // Terminal outcome / result (mutually exclusive with save-just-an-attempt)
-      result:            '',      // 'won' | 'lost' | 'estimate_sent' | 'pending_response'
-      // Won-specific
-      frequency:                    '',
-      first_recurring_start_date:   '',
-      // Lost-specific
-      lost_reason:       '',
-      // Shared
-      notes:             ''
-    };
-    CURRENT.pitchMeta = {priors: priors, nextAttempt: nextAttempt};
-
-    // Attempts tracker rows
-    const trackerRows = [1,2,3].map(function(n){
-      const prior = priors.find(function(p){ return p.n === n; });
-      if (prior) {
-        const label = prior.answered ? 'Answered' : 'No answer';
-        const outcome = prior.outcome
-          ? ' · ' + (prior.outcome === 'reached_and_pitched' ? 'Reached & pitched' : 'Left VM / text')
-          : '';
-        return '<div class="pitch-attempt done">' +
-          '<span class="pitch-attempt-n">Attempt ' + n + '</span>' +
-          '<span class="pitch-attempt-result">✓ ' + esc(label) + esc(outcome) + '</span>' +
-          '<span class="pitch-attempt-when">' + esc(fmtLogged(prior)) + '</span>' +
-        '</div>';
-      }
-      const isActive = (n === nextAttempt);
-      return '<div class="pitch-attempt' + (isActive ? ' active' : ' pending') + '" data-attempt="' + n + '">' +
-        '<span class="pitch-attempt-n">Attempt ' + n + '</span>' +
-        (isActive
-          ? '<span class="pitch-attempt-controls">' +
-              segmentedInline('attempt_answered', [['true','Answered'],['false','No answer']], '') +
-            '</span>'
-          : '<span class="pitch-attempt-result muted">Waiting on attempt ' + (n-1) + '</span>'
-        ) +
-      '</div>';
-    }).join('');
-
-    const attemptsClosed = (priors.length >= 3);
-
-    // Phase 3 fold-in: hard warning after 3 attempts. The tracker naturally
-    // stops rendering a 4th row, but we need a visible instruction telling
-    // Jaylee that a text (logged as an outcome, not a 4th attempt) is the
-    // right next step per the 3-call rule.
-    const threeCallWarning = attemptsClosed
-      ? '<div class="pitch-warn">' +
-          '<strong>You\'ve hit the 3-call rule.</strong> A text is the next step ' +
-          'per protocol — don\'t log a 4th call. If you texted and she responded, ' +
-          'pick <em>Reached &amp; pitched</em> + a Result. If you texted and got ' +
-          'no reply, pick <em>Left VM / text</em> + Result = Pending response (or ' +
-          'Lost — unreachable if this closes the file).' +
-        '</div>'
-      : '';
-
-    return (
-      '<div id="checkinFormError" class="form-error" style="display:none"></div>' +
-      threeCallWarning +
-
-      '<div class="section-label">Call attempts</div>' +
-      '<div class="pitch-tracker">' + trackerRows + '</div>' +
-
-      '<div class="section-label">Outcome (this attempt)</div>' +
-      '<div class="form-group" id="pitchOutcomeWrap">' +
-        segmented('attempt_outcome',
-          [['reached_and_pitched','Reached & pitched'],['left_vm_or_text','Left VM / text']], '') +
-      '</div>' +
-
-      '<div class="section-label">Result</div>' +
-      '<div class="form-group">' +
-        segmented('result',
-          [['won','Won — booked recurring'],
-           ['lost','Lost — declined'],
-           ['estimate_sent','Estimate sent'],
-           ['pending_response','Pending response']], '') +
-        '<div class="form-help">Pick one to log a terminal outcome and advance the customer. Or leave blank to save just the attempt.</div>' +
-      '</div>' +
-
-      // Won-specific block (hidden until result=won)
-      '<div id="pitchWonBlock" class="pitch-conditional" style="display:none">' +
-        '<div class="section-label">Won details</div>' +
-        '<div class="form-group">' +
-          '<label class="form-label">Frequency</label>' +
-          '<select class="form-input" data-field="frequency">' +
-            '<option value="">— select —</option>' +
-            PITCH_FREQUENCIES.map(function(o){
-              return '<option value="' + esc(o[0]) + '">' + esc(o[1]) + '</option>';
-            }).join('') +
-          '</select>' +
-        '</div>' +
-        '<div class="form-group">' +
-          '<label class="form-label">First recurring start date</label>' +
-          '<input type="date" class="form-input" data-field="first_recurring_start_date"/>' +
-        '</div>' +
-      '</div>' +
-
-      // Lost-specific block
-      '<div id="pitchLostBlock" class="pitch-conditional" style="display:none">' +
-        '<div class="section-label">Lost details</div>' +
-        '<div class="form-group">' +
-          '<label class="form-label">Reason</label>' +
-          '<select class="form-input" data-field="lost_reason">' +
-            '<option value="">— select —</option>' +
-            PITCH_LOST_REASONS.map(function(o){
-              return '<option value="' + esc(o[0]) + '">' + esc(o[1]) + '</option>';
-            }).join('') +
-          '</select>' +
-        '</div>' +
-      '</div>' +
-
-      '<div class="section-label">Notes</div>' +
-      '<div class="form-group" id="pitchNotesGroup">' +
-        '<textarea id="pitchNotesField" class="form-textarea" data-field="notes" placeholder="What she said, red flags, price objections, timing issues, whatever you want future-Jaylee (or the classifier) to know"></textarea>' +
-        '<div class="form-help" id="pitchNotesHelp" style="display:none">Notes required (≥ 10 chars) when no call attempt was logged — briefly explain how this outcome came about.</div>' +
-      '</div>'
-    );
-  }
+  // ---- Legacy form system removed 2026-07-31 (Cam) ----------------
+  // The pre-Phase-4 modal form stack lived here: renderFirstCheckInForm /
+  // renderSecondCheckInForm / renderOnboardingCallForm /
+  // renderRecurringPitchForm, plus priorPitchAttempts, wireForm,
+  // refreshSaveButton and doSave (~600 lines). None of the four
+  // renderers was called by anything, so CURRENT.formStage was never
+  // set, so doSave() returned on its first line and refreshSaveButton()
+  // no-oped — the whole tree was unreachable. It was also the last code
+  // still carrying the retired per-attempt `outcome` field, which made
+  // it look live when reading the file. Everything real now runs through
+  // the stage-card panel: renderPanel -> renderStageCard -> saveStage(n).
 
   // Convenience: single-row segmented used inside attempt tracker rows.
   // Shares click wiring with the regular segmented helper.
@@ -5906,137 +5602,6 @@
   // refreshStage5Blocks removed (was Won/Lost toggler for the old separate
   // Stage 5). Merged into refreshStage4Blocks on Stage 4\'s card body.
 
-  // Legacy wireForm — used only by the old renderCurrentStep path which
-  // Phase 4 no longer invokes. Kept as a no-op so any straggling caller
-  // doesn't blow up. Safe to remove in a later cleanup pass.
-  function wireForm() {
-    if (!CURRENT || !CURRENT.formStage) return;
-    // Segmented toggles
-    bodyEl.querySelectorAll('[data-segmented]').forEach(function(group){
-      const field = group.getAttribute('data-segmented');
-      group.querySelectorAll('button').forEach(function(btn){
-        btn.addEventListener('click', function(){
-          group.querySelectorAll('button').forEach(b => b.classList.remove('on'));
-          btn.classList.add('on');
-          const raw = btn.getAttribute('data-value');
-          if (field === 'met_customer' || field === 'card_on_file' || field === 'reached' || field === 'going_well') {
-            CURRENT.values[field] = strToBool(raw);
-          } else {
-            CURRENT.values[field] = raw;
-          }
-        });
-      });
-    });
-    // Chips (multi-select)
-    bodyEl.querySelectorAll('[data-chips]').forEach(function(group){
-      const field = group.getAttribute('data-chips');
-      group.querySelectorAll('.chip').forEach(function(chip){
-        chip.addEventListener('click', function(){
-          const val = chip.getAttribute('data-value');
-          const list = CURRENT.values[field];
-          const i = list.indexOf(val);
-          if (i >= 0) list.splice(i, 1); else list.push(val);
-          chip.classList.toggle('on');
-        });
-      });
-    });
-    // Text inputs / textareas / selects.
-    // Call refreshSaveButton + refreshPitchUI directly so behavior is
-    // correct even when the caller dispatches non-bubbling synthetic
-    // events (real user input bubbles up to bodyEl and would fire the
-    // container-level listeners below anyway).
-    bodyEl.querySelectorAll('[data-field]').forEach(function(el){
-      const ev = el.tagName === 'SELECT' ? 'change' : 'input';
-      el.addEventListener(ev, function(){
-        CURRENT.values[el.getAttribute('data-field')] = el.value;
-        refreshSaveButton();
-        if (CURRENT.formStage === 'pitch') refreshPitchUI();
-      });
-    });
-    // Phase 2b: pitch form — Result controls Won/Lost conditional visibility
-    // + updates the Save button label. Also refresh the save-enabled state
-    // any time the operator touches the form.
-    function refreshPitchUI() {
-      if (CURRENT.formStage !== 'pitch') return;
-      const v = CURRENT.values;
-      const meta = CURRENT.pitchMeta || {priors: []};
-      const won  = document.getElementById('pitchWonBlock');
-      const lost = document.getElementById('pitchLostBlock');
-      if (won)  won.style.display  = (v.result === 'won')  ? '' : 'none';
-      if (lost) lost.style.display = (v.result === 'lost') ? '' : 'none';
-      // Phase 3 fold-in: highlight notes when Won/Lost picked with zero prior attempts
-      const notesField = document.getElementById('pitchNotesField');
-      const notesHelp  = document.getElementById('pitchNotesHelp');
-      const needsNotes = (v.result === 'won' || v.result === 'lost')
-                         && meta.priors && meta.priors.length === 0;
-      if (notesField) notesField.classList.toggle('notes-required', !!needsNotes);
-      if (notesHelp)  notesHelp.style.display = needsNotes ? '' : 'none';
-      refreshSaveButton();
-    }
-    bodyEl.querySelectorAll('[data-segmented="result"] button').forEach(function(btn){
-      btn.addEventListener('click', refreshPitchUI);
-    });
-    // Any input at all should re-evaluate save-button state (e.g. after
-    // picking an attempt answered, the "Save attempt" label lights up).
-    bodyEl.addEventListener('input',  refreshSaveButton);
-    bodyEl.addEventListener('change', refreshSaveButton);
-    bodyEl.addEventListener('click',  refreshSaveButton);
-    refreshPitchUI();
-  }
-
-  // Compute save-button label + enabled state based on the current form
-  // state. Extracted so both wireForm() and post-user-interaction can call it.
-  function refreshSaveButton() {
-    if (!CURRENT || !CURRENT.formStage) {
-      saveBtn.style.display = 'none';
-      return;
-    }
-    saveBtn.style.display = '';
-    const v = CURRENT.values;
-    let label = 'Save';
-    let enabled = true;
-    if (CURRENT.formStage === 'first') {
-      label = 'Save check-in →';
-    } else if (CURRENT.formStage === 'second') {
-      label = 'Save & mark Retained →';
-    } else if (CURRENT.formStage === 'onboarding') {
-      label = 'Save & advance →';
-    } else if (CURRENT.formStage === 'pitch') {
-      const attemptTouched = (v.attempt_answered !== null) || v.attempt_outcome;
-      const meta = CURRENT.pitchMeta || {nextAttempt: 1, priors: []};
-      const attemptsClosed = (meta.priors && meta.priors.length >= 3);
-      // Phase 3 fold-in: Won/Lost with zero prior attempts require notes
-      // ≥ 10 chars (see form for the highlight caption).
-      const needsNotes = ((v.result === 'won' || v.result === 'lost')
-                         && meta.priors && meta.priors.length === 0);
-      const notesOk = !!(v.notes && v.notes.trim().length >= 10);
-
-      if (v.result === 'won') {
-        label = 'Save & advance to Won →';
-        enabled = !!v.frequency && !!v.first_recurring_start_date
-                  && (!needsNotes || notesOk);
-      } else if (v.result === 'lost') {
-        label = 'Save & mark Lost →';
-        enabled = !!v.lost_reason && (!needsNotes || notesOk);
-      } else if (v.result === 'estimate_sent') {
-        label = 'Save & mark Estimate sent →';
-      } else if (v.result === 'pending_response') {
-        label = 'Save & mark Pending →';
-      } else if (attemptTouched && !attemptsClosed) {
-        label = 'Save attempt ' + meta.nextAttempt;
-      } else if (attemptTouched && attemptsClosed) {
-        // 3-call rule hit — an attempt is being clicked but shouldn't be
-        // saved as attempt 4. Force a Result.
-        label = 'Pick a Result — 3-call rule hit';
-        enabled = false;
-      } else {
-        label = 'Save';
-        enabled = false;
-      }
-    }
-    saveBtn.textContent = label;
-    saveBtn.disabled = !enabled || !!CURRENT.saving;
-  }
 
   // ---- Phase 4: per-stage save (state → customer_profiles, event → customer_actions) ----
   // 2026-07-21 (Cam): optimistic stage advancement after save. When a
@@ -6650,205 +6215,6 @@
     }
   }
 
-  // ---- Legacy Save (still referenced by residual button wiring) ----
-  async function doSave() {
-    if (!CURRENT || !CURRENT.formStage || CURRENT.saving) return;
-    const c = CURRENT.customer;
-    const v = CURRENT.values;
-    const errEl = document.getElementById('checkinFormError');
-    if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
-
-    // Phase 3 fold-in: refuse to save without a picked identity — every
-    // customer_actions row must carry provenance. requireIdentity() also
-    // pulses the top-right selector so the user knows where to fix it.
-    if (!requireIdentity()) {
-      if (errEl) {
-        errEl.textContent = 'Pick who you are first (top-right of the dashboard) before logging actions.';
-        errEl.style.display = 'block';
-      }
-      toast('Pick who you are first — top-right of the dashboard.', true);
-      return;
-    }
-
-    CURRENT.saving = true;
-    saveBtn.disabled = true;
-    saveBtn.textContent = 'Saving…';
-
-    // Legacy forms (2026-07-29): no 6 AM promise here either — writes are
-    // mirrored locally and the panel re-renders, same as saveStage().
-    const legacyProfIso = new Date().toISOString();
-
-    try {
-      if (CURRENT.formStage === 'first') {
-        const eventData = {
-          met_customer:       v.met_customer,
-          // intro_method: how Halee introduced herself. Stored on the action
-          // event_data only (no customer_profiles column) — same as the
-          // stage-8 detail-panel save path.
-          intro_method:       v.intro_method || null,
-          top_priorities:     v.top_priorities,
-          specific_requests:  v.specific_requests || null,
-          card_on_file:       v.card_on_file,
-          home_during_cleans: v.home_during_cleans || null,
-          access_notes:       v.access_notes || null,
-          contact_preference: v.contact_preference || null,
-          notes:              v.notes || null
-        };
-        await sb('customer_actions', {
-          method: 'POST',
-          body: JSON.stringify({
-            customer_id: c.customer_id,
-            stage_name:  'first_check_in',
-            event_data:  eventData,
-            logged_by:   loggedBy()
-          })
-        });
-        // UPSERT customer_profiles — pass every field the form covers so a
-        // re-save updates them (even if the customer had a prior profile).
-        await sb('customer_profiles?on_conflict=customer_id', {
-          method: 'POST',
-          headers: {'Prefer': 'resolution=merge-duplicates,return=representation'},
-          body: JSON.stringify({
-            customer_id:        c.customer_id,
-            met_customer:       v.met_customer,
-            top_priorities:     v.top_priorities.length ? v.top_priorities : null,
-            specific_requests:  v.specific_requests || null,
-            card_on_file:       v.card_on_file,
-            home_during_cleans: v.home_during_cleans || null,
-            access_notes:       v.access_notes || null,
-            contact_preference: v.contact_preference || null,
-            notes:              v.notes || null,
-            updated_at:         legacyProfIso
-          })
-        });
-        mirrorProfileLocally(c, {
-          met_customer:       v.met_customer,
-          top_priorities:     v.top_priorities.length ? v.top_priorities : null,
-          specific_requests:  v.specific_requests || null,
-          card_on_file:       v.card_on_file,
-          home_during_cleans: v.home_during_cleans || null,
-          access_notes:       v.access_notes || null,
-          contact_preference: v.contact_preference || null,
-          notes:              v.notes || null
-        }, legacyProfIso);
-        toast('Saved. First check-in logged.');
-      } else if (CURRENT.formStage === 'second') {
-        await sb('customer_actions', {
-          method: 'POST',
-          body: JSON.stringify({
-            customer_id: c.customer_id,
-            stage_name:  'second_check_in',
-            event_data:  {
-              contact_method: v.contact_method || null,
-              reached:        v.reached,
-              going_well:     v.going_well,
-              notes:          v.notes || null
-            },
-            logged_by:   loggedBy()
-          })
-        });
-        toast('Saved. Second check-in logged.');
-      } else if (CURRENT.formStage === 'onboarding') {
-        await sb('customer_actions', {
-          method: 'POST',
-          body: JSON.stringify({
-            customer_id: c.customer_id,
-            stage_name:  'onboarding_call',
-            event_data:  {
-              contact_method: v.contact_method || null,
-              type_of_clean:  v.type_of_clean  || null,
-              notes:          v.notes || null
-            },
-            logged_by:   loggedBy()
-          })
-        });
-        toast('Saved. Onboarding call logged.');
-      } else if (CURRENT.formStage === 'pitch') {
-        // Pitch flow branches by whether Result is set. A terminal outcome
-        // writes ONE row (the final stage_name). Just-an-attempt writes
-        // ONE row for the attempt.
-        const meta = CURRENT.pitchMeta || {nextAttempt: 1};
-        if (v.result === 'won') {
-          await sb('customer_actions', {method: 'POST', body: JSON.stringify({
-            customer_id: c.customer_id, stage_name: 'recurring_pitch_won',
-            logged_by: loggedBy(),
-            event_data: {
-              frequency:                  v.frequency || null,
-              first_recurring_start_date: v.first_recurring_start_date || null,
-              notes:                      v.notes || null,
-              // Preserve context: what attempt was this + how they reached them
-              attempt_number:  meta.nextAttempt,
-              contact_outcome: v.attempt_outcome || null
-            }
-          })});
-          toast('Saved. Recurring pitch WON.');
-        } else if (v.result === 'lost') {
-          await sb('customer_actions', {method: 'POST', body: JSON.stringify({
-            customer_id: c.customer_id, stage_name: 'lost_outcome',
-            logged_by: loggedBy(),
-            event_data: {
-              reason:          v.lost_reason || null,
-              notes:           v.notes || null,
-              attempt_number:  meta.nextAttempt,
-              contact_outcome: v.attempt_outcome || null
-            }
-          })});
-          toast('Saved. Customer marked Lost.');
-        } else if (v.result === 'estimate_sent') {
-          await sb('customer_actions', {method: 'POST', body: JSON.stringify({
-            customer_id: c.customer_id, stage_name: 'recurring_pitch_estimate_sent',
-            logged_by: loggedBy(),
-            event_data: {
-              notes:           v.notes || null,
-              attempt_number:  meta.nextAttempt,
-              contact_outcome: v.attempt_outcome || null
-            }
-          })});
-          toast('Saved. Estimate sent logged.');
-        } else if (v.result === 'pending_response') {
-          await sb('customer_actions', {method: 'POST', body: JSON.stringify({
-            customer_id: c.customer_id, stage_name: 'recurring_pitch_pending_response',
-            logged_by: loggedBy(),
-            event_data: {
-              notes:           v.notes || null,
-              attempt_number:  meta.nextAttempt,
-              contact_outcome: v.attempt_outcome || null
-            }
-          })});
-          toast('Saved. Pending response logged.');
-        } else {
-          // Just logging this attempt — no terminal outcome yet.
-          const n = meta.nextAttempt;
-          await sb('customer_actions', {method: 'POST', body: JSON.stringify({
-            customer_id: c.customer_id,
-            stage_name: 'recurring_pitch_attempt_' + n,
-            logged_by: loggedBy(),
-            event_data: {
-              answered: v.attempt_answered,
-              outcome:  v.attempt_outcome || null,
-              notes:    v.notes || null
-            }
-          })});
-          toast('Saved. Attempt ' + n + ' logged — card stays at stage 5.');
-        }
-      }
-      closePanel();
-      renderTab();   // 2026-07-29: reflect the write immediately, not at 6 AM
-    } catch (err) {
-      console.error(err);
-      if (errEl) {
-        errEl.textContent = 'Save failed — ' + err.message + '. Check the details and try again.';
-        errEl.style.display = 'block';
-      }
-      toast('Save failed — ' + err.message, true);
-    } finally {
-      if (CURRENT) {
-        CURRENT.saving = false;
-        refreshSaveButton();
-      }
-    }
-  }
-  saveBtn.addEventListener('click', doSave);
 
   // Sanity signal in DevTools so we can tell the panel wired up on load.
   console.log('Pipeline dashboard Phase 2b — ' + CUSTOMERS.length + ' customers loaded, supabase ' + (SB.enabled ? 'enabled' : 'DISABLED') + ', identity=' + (currentIdentity() || 'unset'));
