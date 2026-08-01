@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260801T144543">
+<meta name="hc-build-id" content="20260801T151936">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1378,7 +1378,7 @@
     <h1>Hero Cleaners — Customer Pipeline</h1>
     <div class="subtitle">
       Phase 3 · focus tabs · Halee + Jaylee interactive · click any card to log an action ·
-      generated 2026-08-01T14:31:49.895888 · snapshot date 2026-08-01 ·
+      generated 2026-08-01T15:12:35.552050 · snapshot date 2026-08-01 ·
       <a href="https://camsmith126.github.io/hero-cleaners-residential-dashboard/" style="color:#C5CBD3">← residential dashboard</a>
     </div>
   </div>
@@ -4636,6 +4636,13 @@
                   : (d.reached_via.indexOf('attempt_') === 0 ? 'attempt ' + d.reached_via.slice(-1) : d.reached_via);
         bits.push('Reached: ' + esc(via));
       }
+      // New question set (Cam 2026-07-31) first, legacy pills below.
+      if (d.clean_recap) bits.push('Clean recap: ' + esc(d.clean_recap));
+      if (d.cleaner_experience) bits.push('Cleaner experience: ' + esc(d.cleaner_experience));
+      if (d.next_clean_confirmed != null)
+        bits.push('Next clean confirmed: <strong>' + (d.next_clean_confirmed ? 'Yes' : 'No') + '</strong>'
+                  + (d.next_clean_note ? ' — ' + esc(d.next_clean_note) : ''));
+      if (d.remember_next_time) bits.push('Remember next time: ' + esc(d.remember_next_time));
       if (d.vibe) bits.push('Vibe: <strong>' + esc(d.vibe) + '</strong>');
       if (d.cleaner_fit) bits.push('Cleaner fit: <strong>' + esc({'great':'great fit','fine':'fine','concerns':'concerns'}[d.cleaner_fit] || d.cleaner_fit) + '</strong>');
       if (d.frequency_check) bits.push('Frequency: ' + esc({'more':'wants more frequent','right':'current cadence works','less':'would like less'}[d.frequency_check] || d.frequency_check));
@@ -5262,11 +5269,21 @@
 
     // Seed values from prior close-out so re-opens preserve them.
     const met  = (d.met_in_person != null) ? (d.met_in_person ? 'true' : 'false') : '';
-    const vibe = d.vibe || '';
-    const freq = d.frequency_check || '';
-    const timeCheck = d.time_check || '';
-    const cleanerFit = d.cleaner_fit || '';
     const notes = d.notes || '';
+    // New question set (Cam 2026-07-31) — free-text recap instead of the
+    // old vibe/cleaner-fit/frequency/time pill stack.
+    const cleanRecap  = d.clean_recap || '';
+    const cleanerExp  = d.cleaner_experience || '';
+    const nextClean   = (d.next_clean_confirmed != null)
+      ? (d.next_clean_confirmed ? 'true' : 'false') : '';
+    const nextCleanNote = d.next_clean_note || '';
+    const rememberNext  = d.remember_next_time || '';
+    // Old completed check-ins keep their answers ON SCREEN rather than
+    // being re-rendered as blank new questions (Cam: "just make these
+    // changes for any that have not been filled out yet and future ones").
+    const hasLegacyAnswers = !!(d.vibe || d.cleaner_fit || d.frequency_check || d.time_check);
+    const hasNewAnswers = !!(cleanRecap || cleanerExp || nextClean || rememberNext);
+    const showLegacy = populated && hasLegacyAnswers && !hasNewAnswers;
 
     // Personalize the cleaner-fit label with the assigned cleaner\'s name
     // when we have it. Falls back to a generic label for grandfathered /
@@ -5332,56 +5349,58 @@
         '</div>'
       : '';
 
-    // "Replied by text" (Cam 2026-07-27): after the fallback text, the
-    // customer often answers WITH real info (Megan Keay). This completes
-    // the check-in as reached-by-text and saves whatever fields the
-    // thread gave us — partial answers allowed. Seeded from the latest
-    // close-out so re-opens show the state.
-    const textReplySeed = (d.reached_via === 'text_reply') ? 'true' : '';
-    const textReplyBlock =
-      '<div class="stage-field-row"><span class="field-label">Replied by text?</span><span class="field-value">' +
-        segmented('__s7_text_reply', [['true','Yes — they answered by text']], textReplySeed) +
-      '</span></div>' +
-      '<div class="stage-hint" style="margin-top:-4px">If they responded to the text, pick Yes and fill in whatever the messages told you below — partial answers are fine. Saves the check-in as reached by text.</div>';
-
     const attemptsBlock =
       '<div id="s8_attempts_block_' + esc(c.customer_id) + '" data-s8-block="attempts" style="display:' + (met === 'true' ? 'none' : '') + '">' +
         '<div class="stage-hint">Log up to 3 phone attempts to reach them. Each Reached/No answer saves independently — come back later for the next attempt.</div>' +
         '<div class="pitch-tracker" style="margin-top:10px">' + trackerRows + '</div>' +
         textSentBlock8 +
         (attemptsClosed && !anyReached
-          ? '<div class="pitch-warn"><strong>3 no-answers logged.</strong> Save below to close this check-in as unreached — or if they replied to the text, pick "Replied by text" below and fill what you can.</div>'
+          ? '<div class="pitch-warn"><strong>3 no-answers logged.</strong> Save below to close this check-in as unreached. If they did get back to you, fill in whatever they told you and it saves as reached.</div>'
           : '') +
-        textReplyBlock +
       '</div>';
 
-    // 2026-07-20 (Cam): always show the question stack — fill in what you have,
-    // save gating still requires vibe/cleaner/freq/time before close-out.
+    // Question set rewritten 2026-07-31 (Cam): the vibe / cleaner-fit /
+    // frequency / time pill stack is gone, replaced by four open questions
+    // that match how Halee actually runs the call. Free text throughout —
+    // partial answers are inherently fine, so there is no pill to fake.
+    const legacyRow = function(label, val){
+      return val ? '<div class="stage-field-row"><span class="field-label">' + esc(label) +
+        '</span><span class="field-value">' + esc(val) + '</span></div>' : '';
+    };
+    const legacyBlock =
+      '<div class="stage-hint">Logged under the previous question set — kept as recorded.</div>' +
+      legacyRow('Vibe', d.vibe) +
+      legacyRow('Cleaner fit', ({'great':'Great fit','fine':'Fine','concerns':'Concerns','not_captured':'Not captured'})[d.cleaner_fit] || d.cleaner_fit) +
+      legacyRow('Frequency check', ({'more':'Wants more frequent','right':'Current cadence works','less':'Would like less frequent','not_captured':'Not captured'})[d.frequency_check] || d.frequency_check) +
+      legacyRow('Time per clean', ({'more':'Wants more time','right':'Current time is right','less':'Could use less time','not_captured':'Not captured'})[d.time_check] || d.time_check) +
+      '<div class="stage-field-row"><span class="field-label">Notes</span><span class="field-value">' +
+        '<textarea class="form-textarea" data-stage-field="6" data-field="notes" placeholder="Anything worth remembering">' + esc(notes) + '</textarea>' +
+      '</span></div>';
+
+    const newQuestionsBlock =
+      '<div class="stage-field-row"><span class="field-label">Clean recap</span><span class="field-value">' +
+        '<textarea class="form-textarea" data-stage-field="6" data-field="clean_recap" placeholder="Did we get to everything she needed?">' + esc(cleanRecap) + '</textarea>' +
+      '</span></div>' +
+      '<div class="stage-hint" style="margin-top:-4px">Did we get to everything she needed?</div>' +
+      '<div class="stage-field-row"><span class="field-label">Cleaner experience</span><span class="field-value">' +
+        '<textarea class="form-textarea" data-stage-field="6" data-field="cleaner_experience" placeholder="How was their experience with the cleaner?">' + esc(cleanerExp) + '</textarea>' +
+      '</span></div>' +
+      '<div class="stage-hint" style="margin-top:-4px">How was their experience with ' + (cleanerName ? esc(cleanerName) : 'the cleaner') + ' (walkthroughs)?</div>' +
+      '<div class="stage-field-row"><span class="field-label">Confirmed next clean</span><span class="field-value">' +
+        segmented('__s7_next_clean', [['true','Yes'],['false','No']], nextClean) +
+        '<input type="text" class="form-input" data-stage-field="6" data-field="next_clean_note" ' +
+          'placeholder="Date / detail" style="max-width:260px;margin-top:8px" value="' + esc(nextCleanNote) + '"/>' +
+      '</span></div>' +
+      '<div class="stage-field-row"><span class="field-label">Remember next time</span><span class="field-value">' +
+        '<textarea class="form-textarea" data-stage-field="6" data-field="remember_next_time" placeholder="Anything specific they\'d like us to remember for next time?">' + esc(rememberNext) + '</textarea>' +
+      '</span></div>' +
+      '<div class="stage-field-row"><span class="field-label">Notes</span><span class="field-value">' +
+        '<textarea class="form-textarea" data-stage-field="6" data-field="notes" placeholder="Anything worth remembering">' + esc(notes) + '</textarea>' +
+      '</span></div>';
+
     const questionsBlock =
       '<div id="s8_questions_block_' + esc(c.customer_id) + '" data-s8-block="questions">' +
-        '<div class="stage-field-row"><span class="field-label">Vibe</span><span class="field-value">' +
-          segmented('__s7_vibe', [['straightforward','Straightforward'],['friendly','Friendly'],['reserved','Reserved'],['not_captured','Not captured']], vibe) +
-        '</span></div>' +
-        '<div class="stage-hint" style="margin-top:-4px">How they engaged — helps shape how we serve them. "Not captured" = the conversation didn\'t tell you (common on text replies) — mark it honestly rather than guessing.</div>' +
-        '<div class="stage-field-row"><span class="field-label">Cleaner</span><span class="field-value">' +
-          segmented('__s7_cleaner', [['great','Great fit'],['fine','Fine'],['concerns','Concerns'],['not_captured','Not captured']], cleanerFit) +
-        '</span></div>' +
-        '<div class="stage-hint" style="margin-top:-4px">' + (cleanerName ? 'About ' + esc(cleanerName) + ' — g' : 'G') + 'reat fit = wants them specifically. Concerns = mentioned issues; capture details in Notes below.</div>' +
-        '<div class="stage-field-row"><span class="field-label">Frequency check</span><span class="field-value">' +
-          segmented('__s7_freq', [['more','Wants more frequent'],['right','Current cadence works'],['less','Would like less frequent'],['not_captured','Not captured']], freq) +
-        '</span></div>' +
-        '<div class="stage-field-row"><span class="field-label">Time per clean</span><span class="field-value">' +
-          segmented('__s7_time', [['more','Wants more time'],['right','Current time is right'],['less','Could use less time'],['not_captured','Not captured']], timeCheck) +
-        '</span></div>' +
-        // 2026-07-22 (audit): "they want to stop" needs a real outcome — it
-        // used to have nowhere to go except the Notes box.
-        '<div class="stage-field-row"><span class="field-label">Service status</span><span class="field-value">' +
-          segmented('__s7_cancel', [['no','Continuing'],['yes','Cancelling service']], '') +
-        '</span></div>' +
-        '<div class="stage-hint" style="margin-top:-4px">Pick Cancelling if they said they want to stop — saving will close the check-in AND mark them Lost. Capture why in Notes.</div>' +
-        '<div class="stage-field-row"><span class="field-label">Notes</span><span class="field-value">' +
-          '<textarea class="form-textarea" data-stage-field="6" data-field="notes" placeholder="Anything worth remembering">' + esc(notes) + '</textarea>' +
-        '</span></div>' +
+        (showLegacy ? legacyBlock : newQuestionsBlock) +
       '</div>';
 
     return {
@@ -5397,15 +5416,10 @@
         // must match the wrapping data-stage-body ("6" after the 2026-07-22
         // renumber) or readStageField's selector silently matches nothing.
         '<input type="hidden" data-stage-field="6" data-field="met_in_person" value="' + esc(met) + '"/>' +
-        '<input type="hidden" data-stage-field="6" data-field="vibe" value="' + esc(vibe) + '"/>' +
-        '<input type="hidden" data-stage-field="6" data-field="cleaner_fit" value="' + esc(cleanerFit) + '"/>' +
-        '<input type="hidden" data-stage-field="6" data-field="frequency_check" value="' + esc(freq) + '"/>' +
-        '<input type="hidden" data-stage-field="6" data-field="time_check" value="' + esc(timeCheck) + '"/>' +
+        '<input type="hidden" data-stage-field="6" data-field="next_clean_confirmed" value="' + esc(nextClean) + '"/>' +
         '<input type="hidden" data-stage-field="6" data-field="att_answered" value=""/>' +
         '<input type="hidden" data-stage-field="6" data-field="att_number" value="' + nextAttempt + '"/>' +
-        '<input type="hidden" data-stage-field="6" data-field="text_sent" value=""/>' +
-        '<input type="hidden" data-stage-field="6" data-field="cancelling" value=""/>' +
-        '<input type="hidden" data-stage-field="6" data-field="text_reply" value="' + esc(textReplySeed) + '"/>'
+        '<input type="hidden" data-stage-field="6" data-field="text_sent" value=""/>'
     };
   }
 
@@ -5604,13 +5618,8 @@
       // clicked segmented is dirtying.
       '__s7_met_in_person':{stage: 6, field: 'met_in_person',        type: 'bool'},
       '__s7_att_answered': {stage: 6, field: 'att_answered',         type: 'bool'},
+      '__s7_next_clean':   {stage: 6, field: 'next_clean_confirmed', type: 'bool'},
       '__s7_text_sent':    {stage: 6, field: 'text_sent',            type: 'bool'},
-      '__s7_vibe':         {stage: 6, field: 'vibe',                 type: 'str'},
-      '__s7_cleaner':      {stage: 6, field: 'cleaner_fit',          type: 'str'},
-      '__s7_freq':         {stage: 6, field: 'frequency_check',      type: 'str'},
-      '__s7_time':         {stage: 6, field: 'time_check',           type: 'str'},
-      '__s7_cancel':       {stage: 6, field: 'cancelling',           type: 'str'},
-      '__s7_text_reply':   {stage: 6, field: 'text_reply',           type: 'str'},
       // Stage 6 (was 8): second check-in.
       '__s8_contact':      {stage: 7, field: 'contact_method',       type: 'str'},
       '__s8_reached':      {stage: 7, field: 'reached',              type: 'bool'},
@@ -6120,18 +6129,17 @@
         const attAnswered = readBool('att_answered');    // true | false | null
         const attNumber   = parseInt(read('att_number') || '1', 10);
         const textSent    = readBool('text_sent');       // only relevant on att 3
-        const vibe        = read('vibe');
-        const cleanerFit  = read('cleaner_fit');
-        const freq        = read('frequency_check');
-        const timeCheck   = read('time_check');
         const notes       = read('notes');
+        // New question set (Cam 2026-07-31) — all free text except the
+        // confirmed-next-clean yes/no.
+        const cleanRecap    = read('clean_recap') || '';
+        const cleanerExp    = read('cleaner_experience') || '';
+        const nextClean     = readBool('next_clean_confirmed');
+        const nextCleanNote = read('next_clean_note') || '';
+        const rememberNext  = read('remember_next_time') || '';
         // Per-attempt note (Cam 2026-07-31) — same as Stage 4. Saved on the
         // attempt row; the shared Notes box below belongs to the close-out.
         const attemptNotes8 = read('attempt_notes') || '';
-        // 2026-07-22 (audit): "Cancelling service" outcome. Closes the
-        // check-in AND writes lost_outcome in the same save.
-        const cancelling  = (read('cancelling') === 'yes');
-
         const priorAttempts = (c.pipeline_actions || []).filter(function(a){
           return (a.stage_name || '').indexOf('first_check_in_attempt_') === 0;
         });
@@ -6140,34 +6148,30 @@
         });
         const attemptsClosed = priorAttempts.length >= 3;
         const anyReached = anyPriorReached || (attAnswered === true);
-        const hasQuestions = !!(vibe && cleanerFit && freq && timeCheck);
+        // 2026-07-31 (Cam): the old gate demanded all four pills before a
+        // close-out. The questions are free text now, so the bar is simply
+        // "did she record anything" — one answer is enough. An unreached
+        // close-out still needs nothing.
+        const hasAnswer = !!(cleanRecap || cleanerExp || rememberNext
+                             || nextClean !== null || (notes || '').trim());
         const closingUnreached = attemptsClosed && !anyReached;
         // 3rd-attempt fallback: no answer + fallback text confirmed → close
         // the check-in as unreached in the same save (Cam 2026-07-21). No
         // need to make Halee hit save twice.
         const attemptThreeUnreached = (attNumber === 3 && attAnswered === false && textSent === true);
-        // 2026-07-27 (Cam): "Replied by text" — Halee sent the fallback
-        // text and the customer answered with real info (Megan Keay).
-        // Completes the check-in with whatever fields the text thread
-        // gave us — partial answers allowed, unlike the phone path.
-        const textReply = (read('text_reply') === 'true');
 
-        // Decide branches. A "cancelling" pick always closes out — the
-        // outcome is known even if the question stack wasn\'t filled.
         const freshAttempt = (attAnswered !== null && !attemptsClosed && met !== true);
-        const canCloseOut  = (met === true) || anyReached || closingUnreached || attemptThreeUnreached || cancelling || textReply;
-        const shouldCloseOut = canCloseOut && (hasQuestions || closingUnreached || attemptThreeUnreached || cancelling || textReply);
+        const canCloseOut  = (met === true) || anyReached || closingUnreached || attemptThreeUnreached;
+        const shouldCloseOut = canCloseOut && (hasAnswer || closingUnreached || attemptThreeUnreached);
 
         // Guard: nothing to save.
         if (!freshAttempt && !shouldCloseOut) {
           if (met === null) {
             toast('Pick whether you met the customer in person first.', true);
-          } else if (met === true && !hasQuestions) {
-            toast('Pick Vibe, Cleaner fit, Frequency check, and Time per clean to close out.', true);
           } else if (met === false && attAnswered === null && !anyPriorReached && !attemptsClosed) {
             toast('Log an attempt (Reached / No answer) or switch Met in person to Yes.', true);
           } else {
-            toast('Fill Vibe, Cleaner fit, Frequency check, and Time per clean to close the check-in.', true);
+            toast('Add at least one answer below (or a note) to close the check-in.', true);
           }
           throw new Error('nothing to save on stage 8');
         }
@@ -6201,21 +6205,21 @@
         // Branch 2: close-out row.
         if (shouldCloseOut) {
           const reachedVia = (met === true) ? 'in_person'
-                           : textReply ? 'text_reply'
                            : (attAnswered === true) ? ('attempt_' + attNumber)
                            : anyPriorReached ? 'earlier_attempt'
                            : attemptThreeUnreached ? 'unreached_after_text'
                            : 'unreached';
-          // Save whatever fields are filled (2026-07-27) — a text thread
-          // gives partial answers, and partial truth beats empty fields.
+          // New question set (Cam 2026-07-31). Every field optional —
+          // whatever the conversation gave us gets recorded as-is.
           const eventData = {
-            met_in_person:   met,
-            vibe:            vibe || null,
-            cleaner_fit:     cleanerFit || null,
-            frequency_check: freq || null,
-            time_check:      timeCheck || null,
-            reached_via:     reachedVia,
-            notes:           notes || null
+            met_in_person:        met,
+            clean_recap:          cleanRecap || null,
+            cleaner_experience:   cleanerExp || null,
+            next_clean_confirmed: nextClean,
+            next_clean_note:      nextCleanNote || null,
+            remember_next_time:   rememberNext || null,
+            reached_via:          reachedVia,
+            notes:                notes || null
           };
           if (shouldFlagRetroactive(c, 8, 'first_check_in')) eventData.retroactive = true;
           const respCo8 = await sb('customer_actions', {
@@ -6229,33 +6233,11 @@
           });
           mirrorActionLocally(c, 'first_check_in', eventData, Array.isArray(respCo8) ? respCo8[0] : null);
           advanceStageLocally(c, 'first_check_in');
-
-          // Cancelling: also write the terminal lost_outcome so the
-          // classifier + Lost sections pick them up tonight, and flip the
-          // local state now.
-          if (cancelling) {
-            const cancelEvent = { reason: 'cancelled_at_first_check_in', notes: notes || null };
-            const respCx6 = await sb('customer_actions', {
-              method: 'POST',
-              body: JSON.stringify({
-                customer_id: c.customer_id,
-                stage_name:  'lost_outcome',
-                event_data:  cancelEvent,
-                logged_by:   loggedBy()
-              })
-            });
-            mirrorActionLocally(c, 'lost_outcome', cancelEvent, Array.isArray(respCx6) ? respCx6[0] : null);
-            advanceStageLocally(c, 'lost_outcome');
-          }
         }
 
         // Toast wording.
         let msg;
-        if (cancelling && shouldCloseOut) {
-          msg = 'Saved. First check-in closed — customer marked Lost (cancelling service).';
-        } else if (textReply && shouldCloseOut) {
-          msg = 'Saved. First check-in completed from their text reply.';
-        } else if (freshAttempt && shouldCloseOut) {
+        if (freshAttempt && shouldCloseOut) {
           msg = attemptThreeUnreached
             ? 'Saved. Attempt 3 logged + check-in auto-closed as unreached (text sent).'
             : 'Saved. Attempt ' + attNumber + ' logged + check-in closed.';
