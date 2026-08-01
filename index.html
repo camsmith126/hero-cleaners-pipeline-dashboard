@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260801T143150">
+<meta name="hc-build-id" content="20260801T144543">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -5039,9 +5039,13 @@
     }).join('');
 
 
-    // 3-call warning banner.
-    const warn = (priors.length >= 3 && !anyReachedAndPitched && !terminalPopulated)
-      ? '<div class="pitch-warn"><strong>You\'ve hit the 3-call rule.</strong> A text is the next step per protocol — don\'t log a 4th call. Pick a Result below (Pending response or Lost — unreachable).</div>'
+    // 3-call warning banner. The old `!anyReachedAndPitched` term died with
+    // the per-attempt outcome field (Cam 2026-07-31) — leaving the
+    // reference behind threw a ReferenceError that killed the WHOLE detail
+    // panel for anyone with 3 attempts logged. 3 attempts + no Result is
+    // the only condition that matters now.
+    const warn = (priors.length >= 3 && !terminalPopulated)
+      ? '<div class="pitch-warn"><strong>You\'ve hit the 3-call rule.</strong> Don\'t log a 4th call — pick a Result below (Pending response, or Lost if they\'re unreachable).</div>'
       : '';
 
     // ---- Terminal-outcome (Won/Lost/Estimate/Pending) block ----
