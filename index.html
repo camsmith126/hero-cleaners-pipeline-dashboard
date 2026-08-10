@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260810T161240">
+<meta name="hc-build-id" content="20260810T161809">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -3172,11 +3172,20 @@
     else if (cur === 8 || cur === 9) ownerTag = '<span class="owner-tag owner-halee">Halee · check-in</span>';
     else if (cur === 10)             ownerTag = '<span class="owner-tag owner-auto">Retained</span>';
     else if (owner === 'jaylee')     ownerTag = '<span class="owner-tag owner-jaylee">Jaylee · action</span>';
-    // Behind on two stages at once (Cam 2026-08-10) — the clean is logged
-    // in HCP but the seed-planted fields are blank AND the pitch is due.
-    if (ps.dual_task) ownerTag += '<span class="owner-tag owner-behind">Behind · 2 tasks</span>';
     else if (owner === 'cleaner')    ownerTag = '<span class="owner-tag owner-cleaner">Cleaner · action</span>';
     else                             ownerTag = '<span class="owner-tag owner-auto">Automatic</span>';
+    // Behind on two stages at once (Cam 2026-08-10) — the clean is logged
+    // in HCP but the seed-planted fields are blank AND the pitch is due.
+    // Overrides the owner tag entirely: stage 3's default owner is the
+    // CLEANER (they do the clean), but logging it and pitching are both
+    // Jaylee's, so "Cleaner · action" would point at the wrong person.
+    // NOTE: this must sit AFTER the if/else chain closes — putting it
+    // inside severed the chain and left ownerTag undefined (rendered as a
+    // literal "undefined" next to LTV).
+    if (ps.dual_task) {
+      ownerTag = '<span class="owner-tag owner-jaylee">Jaylee · action</span>'
+               + '<span class="owner-tag owner-behind">Behind · 2 tasks</span>';
+    }
 
     const pipelineHtml = STAGE_META.map(function(m){
       return renderPipelinePill(m.n, m.label, stages[m.n] || 'upcoming', isLost, ps.lost_stage);
