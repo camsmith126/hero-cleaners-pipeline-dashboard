@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260810T113617">
+<meta name="hc-build-id" content="20260810T121704">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1377,8 +1377,8 @@
   <div>
     <h1>Hero Cleaners — Customer Pipeline</h1>
     <div class="subtitle">
-      Phase 3 · focus tabs · Halee + Jaylee interactive · click any card to log an action ·
-      generated 2026-08-10T11:36:16.872287 · snapshot date 2026-08-10 ·
+      Phase 3 · click any card to log an action ·
+      generated 2026-08-10T12:17:04.439486 · snapshot date 2026-08-10 ·
       <a href="https://camsmith126.github.io/hero-cleaners-residential-dashboard/" style="color:#C5CBD3">← residential dashboard</a>
     </div>
   </div>
@@ -1422,7 +1422,6 @@
   <button type="button" role="tab" data-tab="all"       id="tabBtnAll">New Customers <span class="tab-count" id="tabCountAll"></span></button>
   <button type="button" role="tab" data-tab="roster"    id="tabBtnRoster">Roster <span class="tab-count" id="tabCountRoster"></span></button>
   <button type="button" role="tab" data-tab="customers" id="tabBtnCustomers">Customers <span class="tab-count" id="tabCountCustomers"></span></button>
-  <button type="button" role="tab" data-tab="jaylee"    id="tabBtnJaylee">Jaylee <span class="tab-count" id="tabCountJaylee">20</span></button>
 </nav>
 
 <div class="kpi-strip" id="kpiStrip">
@@ -1452,8 +1451,6 @@
        live inside the Roster tab above (top of the tab, filtered to the
        New Recurring customers). -->
 
-  <!-- Jaylee's focus tab -->
-  <div id="tabPanelJaylee" class="tab-panel" role="tabpanel" hidden></div>
 
 </main>
 
@@ -1786,20 +1783,24 @@
     return false;
   }
 
-  // ---- Phase 3: Tab nav (Pipeline / Roster / Customers / Jaylee) ----
-  // 2026-07-20: Halee tab removed — her workflow lives inside Roster now.
+  // ---- Tab nav (New Customers / Roster / Customers) ----
+  // Halee's focus tab folded into Roster (2026-07-20); Jaylee's folded into
+  // New Customers (2026-08-01, Cam) — both were duplicate views of work the
+  // main tabs already show.
   const TAB_KEY = 'hc:pipeline:v1:tab';
-  const VALID_TABS = {all:1, roster:1, customers:1, jaylee:1};
+  const VALID_TABS = {all:1, roster:1, customers:1};
 
   function currentTab() {
     try {
       const v = localStorage.getItem(TAB_KEY);
       if (v && VALID_TABS[v]) return v;
     } catch (_) {}
-    // Default: Halee → Roster (her new home), Jaylee → jaylee, else Pipeline.
+    // Default: Halee → Roster (her home). Everyone else, Jaylee included,
+    // → New Customers. Her separate focus tab was removed 2026-08-01 (Cam:
+    // "she just uses the new customers tab"). A stale 'jaylee' value in
+    // localStorage fails the VALID_TABS check above and falls through here.
     const id = currentIdentity();
     if (id === 'halee')  return 'roster';
-    if (id === 'jaylee') return 'jaylee';
     return 'all';
   }
   function setTab(t) {
@@ -1825,14 +1826,12 @@
     document.getElementById('tabPanelAll'      ).hidden = (t !== 'all');
     document.getElementById('tabPanelRoster'   ).hidden = (t !== 'roster');
     document.getElementById('tabPanelCustomers').hidden = (t !== 'customers');
-    document.getElementById('tabPanelJaylee'   ).hidden = (t !== 'jaylee');
     // Hide the top KPI strip on non-Pipeline tabs (each has its own stats)
     document.getElementById('kpiStrip').style.display = (t === 'all' ? '' : 'none');
     applyCohortFilter();
     if (t === 'all')       renderNewCustomersTab(document.getElementById('tabPanelAll'));
     if (t === 'roster')    renderRosterTab(document.getElementById('tabPanelRoster'));
     if (t === 'customers') renderCustomersTab(document.getElementById('tabPanelCustomers'));
-    if (t === 'jaylee') renderFocusTab('jaylee', document.getElementById('tabPanelJaylee'));
     if (sameTab && prevScrollY > 0) window.scrollTo(0, prevScrollY);
   }
 
@@ -1847,7 +1846,7 @@
   // ---- Cohort toggle (2026-07-18) ----
   // Applies the cohort filter to:
   //   1. All customers tab — cards hidden via CSS .filter-hidden class
-  //   2. Focus tabs — haleeCustomers()/jayleeCustomers() already gate on COHORT
+  //   2. jayleeCustomers() already gates on COHORT
   //   3. Tab counts (both nav + KPI strip) — recomputed against COHORT
   function applyCohortFilter() {
     // 1. All-cards visibility
@@ -1903,7 +1902,6 @@
       if (el) el.textContent = String(v);
     };
     setText('tabCountAll',    inCohort.length);
-    setText('tabCountJaylee', jayleeCt);
     setText('kpiTotal',       inCohort.length);
     setText('kpiActive',      cohortActive);
     setText('kpiJaylee',      jayleeCt);
@@ -1955,37 +1953,12 @@
     return d.toLocaleDateString(undefined, {weekday:'long', month:'long', day:'numeric'});
   }
 
-  // ---- Filtering: which customers belong to which focus tab ----
-  // Both functions honour the cohort filter (2026-07-18) — historical
-  // customers are hidden by default so Halee/Jaylee only see the new-process
-  // cohort. Flip the cohort toggle at the top to see everyone.
-  function haleeCustomers() {
-    // Halee 30-day scope (2026-07-18):
-    //   Stage 1 / Stage 3 with upcoming first-ever visit — informational
-    //     "new customer coming" so she knows what deep/move-in cleans are
-    //     landing before she has to plan an intro at their first recurring.
-    //   Stage 5 (current) — first recurring visit upcoming; she visits in person
-    //   Stage 6 (current) — first check-in due; she logs met_customer + intro_method
-    //   Stage 7 (current) — second check-in due; she calls to follow up
-    // Stage 5 owner is 'auto' (HCP fires the completion) — we surface it on
-    // Halee's calendar anyway so she can plan the in-person visit before
-    // the visit day, then log the check-in once the visit happens.
-    return CUSTOMERS.filter(function(c){
-      if (!COHORT.passes(c)) return false;
-      const ps = c.pipeline_stage || {};
-      const cs = ps.current_stage;
-      if (cs === 5) return true;
-      if (cs === 6 || cs === 7) return ps.next_action_owner === 'halee';
-      // New-customer surface: their first-ever visit is on the schedule
-      // (either upcoming — stages 1-2 — or just happened — stage 3). Use
-      // next_scheduled (falls back to first_visit) as the calendar date.
-      if (cs === 1 || cs === 2 || cs === 3) {
-        const fv = c.next_scheduled || c.first_visit;
-        return !!fv;
-      }
-      return false;
-    });
-  }
+  // renderFocusTab + haleeCustomers removed 2026-08-01 (Cam) along with
+  // Jaylee's focus tab. Halee's tab had already folded into Roster, so the
+  // shared focus-tab renderer had exactly one caller left; removing that
+  // tab left ~290 lines unreachable. jayleeCustomers() SURVIVES — the
+  // "Awaiting Jaylee" KPI tile still counts off it.
+
   function jayleeCustomers() {
     return CUSTOMERS.filter(function(c){
       if (!COHORT.passes(c)) return false;
@@ -2137,270 +2110,6 @@
     return c.display_name || '';
   }
 
-  // ---- Focus tab renderer (Halee + Jaylee share the same shape) ----
-  // Both Halee and Jaylee get the 4-week rolling calendar (Cam 2026-07-19).
-  // Tailored per identity via `who` — different stat cards, different
-  // chip labels, different grouped lists at the bottom.
-  function renderFocusTab(who, container) {
-    const custs = (who === 'halee' ? haleeCustomers() : jayleeCustomers());
-    const today = todayDate();
-    const wkStart = weekStart(today);
-    const numWeeks = 4;
-    const windowEnd = new Date(wkStart); windowEnd.setDate(windowEnd.getDate() + (numWeeks * 7) - 1);
-    const days = Array.from({length: numWeeks * 7}, function(_, i){
-      const d = new Date(wkStart); d.setDate(d.getDate() + i); return d;
-    });
-    const wkEnd = new Date(wkStart); wkEnd.setDate(wkEnd.getDate() + 6);
-
-    // Bucket customers by day within the window (28-day for Halee, 7-day for Jaylee).
-    const byDay = days.map(function(){ return []; });
-    const todayList = [];
-    const overdue = [];   // due before window start or actionDueDate is null but stage current
-    custs.forEach(function(c){
-      const due = actionDueDate(c);
-      if (!due) {
-        overdue.push(c);
-        return;
-      }
-      if (due < wkStart) {
-        overdue.push(c);
-      } else if (due <= windowEnd) {
-        const idx = daysBetween(due, wkStart);
-        byDay[idx].push(c);
-        if (isoOf(due) === isoOf(today)) todayList.push(c);
-      }
-    });
-
-    // Stat cards — differ per identity per brief.
-    // Halee 2026-07-18: 30-day scope. Jaylee: still weekly.
-    let statsHtml = '';
-    if (who === 'halee') {
-      const inWindow = function(cs) {
-        return custs.filter(function(c){
-          const ps = c.pipeline_stage || {};
-          const due = actionDueDate(c);
-          return ps.current_stage === cs && due && due >= wkStart && due <= windowEnd;
-        }).length;
-      };
-      // First-time cleans span classifier stages 1 (Booked), 2 (Onboarding
-      // call pending), and 3 (First clean done). Sum all three so the stat
-      // card matches the calendar chips.
-      const newJobs = custs.filter(function(c){
-        const cs = (c.pipeline_stage || {}).current_stage;
-        const due = actionDueDate(c);
-        return (cs === 1 || cs === 2 || cs === 3) && due && due >= wkStart && due <= windowEnd;
-      }).length;
-      const s7 = inWindow(7);
-      const s8 = inWindow(8);
-      const s9 = inWindow(9);
-      statsHtml = statCards([
-        ['Today',                    todayList.length + overdue.length, true],
-        ['First-time cleans (30d)',  newJobs, false],
-        ['First recurring (30d)',    s7, false],
-        ['First check-ins (30d)',    s8, false],
-        ['Second check-ins (30d)',   s9, false]
-      ]);
-    } else {
-      const s2 = custs.filter(function(c){
-        const ps = c.pipeline_stage || {};
-        const due = actionDueDate(c);
-        return ps.current_stage === 2 && due && due >= wkStart && due <= windowEnd;
-      }).length;
-      const s5 = custs.filter(function(c){
-        const ps = c.pipeline_stage || {};
-        return ps.current_stage === 4;
-      }).length;
-      // Won this month = customers whose pipeline_actions include a
-      // recurring_pitch_won logged in the current calendar month. This
-      // reads from the embedded actions (populated by the daily pipeline).
-      const monthStart = new Date(today); monthStart.setDate(1);
-      const wonThisMonth = CUSTOMERS.filter(function(c){
-        return (c.pipeline_actions || []).some(function(a){
-          if (a.stage_name !== 'recurring_pitch_won') return false;
-          const d = a.logged_at ? new Date(a.logged_at) : null;
-          return d && d >= monthStart;
-        });
-      }).length;
-      statsHtml = statCards([
-        ['Today',                    todayList.length, true],   // 2026-07-19: excludes overdue for Jaylee
-        ['Onboarding calls (30d)',   s2, false],
-        ['Recurring pitches (30d)',  s5, false],
-        ['Won this month',           wonThisMonth, false]
-      ]);
-    }
-
-    // Today strip
-    // 2026-07-19 (Cam): Jaylee doesn't want to start her day looking at a
-    // backlog of overdue tasks. She should be planning ahead from the
-    // scheduled work. Halee still shows overdue (her cycle is longer and
-    // an overdue first-recurring visit is a real signal).
-    const includeOverdue = (who !== 'jaylee');
-    const todayStripItems = includeOverdue
-      ? todayList.concat(overdue)
-      : todayList.slice();
-    const overdueHiddenNote = (!includeOverdue && overdue.length)
-      ? '<div class="today-hidden-note">' + overdue.length +
-        ' overdue task' + (overdue.length !== 1 ? 's' : '') +
-        ' not shown — focus on what\'s scheduled ahead.</div>'
-      : '';
-    const todayHtml = todayStripItems.length
-      ? ('<div class="today-strip"><div class="today-head">What needs you now — ' + esc(fmtHumanDate(today)) + '</div>' +
-         todayStripItems.map(function(c){
-           const cs = (c.pipeline_stage || {}).current_stage;
-           const chipLabel =
-             (who === 'halee' && (cs === 1 || cs === 2 || cs === 3))
-               ? (shortJobTypeLabel(c.next_scheduled_job_type || c.first_visit_job_type)) :
-             (cs === 1 || cs === 3)
-               ? (shortJobTypeLabel(c.next_scheduled_job_type || c.first_visit_job_type)) :
-             cs === 5 ? 'First recurring · in-person intro' :
-             cs === 6 ? 'First check-in visit' :
-             cs === 7 ? 'Second check-in call' :
-             cs === 2 ? 'Onboarding call' :
-             cs === 4 ? 'Recurring pitch' : 'Action';
-           const due = actionDueDate(c);
-           const overdueTag = (due && due < today) ? ' · <strong style="color:var(--hero-red)">overdue</strong>' : '';
-           const ctx = (c.frequency ? esc(c.frequency) : (c.state ? esc(c.state) : '')) + overdueTag;
-           return '<div class="today-item" data-open-cid="' + esc(c.customer_id) + '">' +
-             '<span class="today-name">' + esc(c.display_name || '') + '</span>' +
-             '<span class="today-chip">' + esc(chipLabel) + '</span>' +
-             '<span class="today-ctx">' + ctx + '</span>' +
-             '<span class="grow-cta">Open panel →</span>' +
-           '</div>';
-         }).join('') + '</div>' + overdueHiddenNote)
-      : '<div class="today-strip empty">Nothing on your plate today. 🎉 Scroll to see the week ahead.' +
-        (overdueHiddenNote ? '</div>' + overdueHiddenNote : '</div>');
-
-    // 4-week rolling calendar for both Halee and Jaylee.
-    const dayHeadNames = ['MON','TUE','WED','THU','FRI','SAT','SUN'];
-    const headHtml =
-      '<div class="month-cal-head">' +
-        '<div class="week-col-head"></div>' +
-        dayHeadNames.map(function(n){ return '<div class="day-head">' + n + '</div>'; }).join('') +
-      '</div>';
-    const rowsHtml = Array.from({length: numWeeks}, function(_, w){
-      const rowStart = new Date(wkStart); rowStart.setDate(rowStart.getDate() + (w * 7));
-      const label = rowStart.toLocaleDateString(undefined, {month:'short', day:'numeric'});
-      const cells = Array.from({length: 7}, function(_, i){
-        const dayIdx = w * 7 + i;
-        const d = days[dayIdx];
-        const isToday = isoOf(d) === isoOf(today);
-        const isPast = !isToday && d < today;
-        const chips = byDay[dayIdx].map(function(c){
-          const cs = (c.pipeline_stage || {}).current_stage;
-          const kind = chipKindFor(cs, isToday, who, c);
-          const label = shortLabelFor(c, cs, who);
-          return '<div class="cal-chip ' + kind + '" data-open-cid="' + esc(c.customer_id) + '" ' +
-                 'title="' + esc(label) + '">' +
-                 esc(label) + '</div>';
-        }).join('');
-        const cls = 'day-cell' + (isToday ? ' today' : (isPast ? ' past' : ''));
-        return '<div class="' + cls + '">' +
-          '<div class="day-num">' + fmtDayNum(d) + '</div>' +
-          chips +
-        '</div>';
-      }).join('');
-      return '<div class="month-cal-row">' +
-        '<div class="week-label">Week of<br>' + esc(label) + '</div>' +
-        cells +
-      '</div>';
-    }).join('');
-    const weekHtml =
-      '<h3 class="section-head">Next 4 weeks — your calendar</h3>' +
-      '<div class="section-help">Rolling 30-day view. Click any chip to open that customer\'s panel.</div>' +
-      '<div class="month-cal">' + headHtml + rowsHtml + '</div>';
-
-    // Grouped lists
-    let groupsHtml = '';
-    if (who === 'halee') {
-      const gNew = custs.filter(function(c){
-        const cs = (c.pipeline_stage || {}).current_stage;
-        return cs === 1 || cs === 2 || cs === 3;
-      }).sort(function(a,b){
-        const da = actionDueDate(a), db = actionDueDate(b);
-        return (da ? da.getTime() : Infinity) - (db ? db.getTime() : Infinity);
-      });
-      const g7 = custs.filter(function(c){ return (c.pipeline_stage || {}).current_stage === 5; })
-        .sort(function(a,b){
-          const da = actionDueDate(a), db = actionDueDate(b);
-          return (da ? da.getTime() : Infinity) - (db ? db.getTime() : Infinity);
-        });
-      const g8 = custs.filter(function(c){ return (c.pipeline_stage || {}).current_stage === 6; });
-      const g9 = custs.filter(function(c){ return (c.pipeline_stage || {}).current_stage === 7; });
-      groupsHtml =
-        '<h3 class="section-head">First-time cleans <span class="tab-count">' + gNew.length + '</span></h3>' +
-        '<div class="section-help">New customers with their first-ever clean coming up. Informational — plan ahead for their first recurring intro.</div>' +
-        renderGroupList(gNew, today) +
-        '<h3 class="section-head">First recurring visits <span class="tab-count">' + g7.length + '</span></h3>' +
-        '<div class="section-help">Their first-ever recurring clean. Plan an in-person intro at the end of the visit.</div>' +
-        renderGroupList(g7, today) +
-        '<h3 class="section-head">First check-in visits <span class="tab-count">' + g8.length + '</span></h3>' +
-        renderGroupList(g8, today) +
-        '<h3 class="section-head">Second check-in calls <span class="tab-count">' + g9.length + '</span></h3>' +
-        renderGroupList(g9, today);
-    } else {
-      // 2026-07-19: Jaylee's grouped lists exclude overdue too — forward-
-      // looking view. Any customer whose actionDueDate is before today
-      // (or has no due date) drops out of the list.
-      const forwardOnly = function(c) {
-        const due = actionDueDate(c);
-        return due && due >= today;
-      };
-      const g5 = custs.filter(function(c){
-        return (c.pipeline_stage || {}).current_stage === 4 && forwardOnly(c);
-      }).sort(function(a,b){
-        const da = actionDueDate(a), db = actionDueDate(b);
-        return (da ? da.getTime() : Infinity) - (db ? db.getTime() : Infinity);
-      });
-      const g2 = custs.filter(function(c){
-        return (c.pipeline_stage || {}).current_stage === 2 && forwardOnly(c);
-      }).sort(function(a,b){
-        const da = actionDueDate(a), db = actionDueDate(b);
-        return (da ? da.getTime() : Infinity) - (db ? db.getTime() : Infinity);
-      });
-      // Count how many are hidden from her view so nothing feels silently lost.
-      const overdueCount = custs.filter(function(c){
-        const cs = (c.pipeline_stage || {}).current_stage;
-        if (cs !== 2 && cs !== 5) return false;
-        return !forwardOnly(c);
-      }).length;
-      const hiddenNote = overdueCount
-        ? '<div class="section-help" style="margin-top:6px">' + overdueCount +
-          ' overdue task' + (overdueCount !== 1 ? 's' : '') +
-          ' not shown here. Log outcomes on the customer\'s detail panel to clear them.</div>'
-        : '';
-      groupsHtml =
-        '<h3 class="section-head">Recurring pitches <span class="tab-count">' + g5.length + '</span></h3>' +
-        '<div class="section-help">Ordered by pitch-due date (first clean + 48h). Overdue not shown.</div>' +
-        renderGroupList(g5, today) +
-        '<h3 class="section-head">Onboarding calls <span class="tab-count">' + g2.length + '</span></h3>' +
-        '<div class="section-help">Ordered by first-clean date. Overdue not shown.</div>' +
-        renderGroupList(g2, today) +
-        hiddenNote;
-    }
-
-    const titleText = who === 'halee' ? "Halee's focus" : "Jaylee's focus";
-    const subtitleText = esc(fmtHumanDate(today)) +
-      ' — everything that needs your attention over the next 30 days.';
-    container.innerHTML =
-      '<div class="focus-header">' +
-        '<div>' +
-          '<h2 class="focus-title">' + esc(titleText) + '</h2>' +
-          '<div class="focus-subtitle">' + subtitleText + '</div>' +
-        '</div>' +
-        '<div class="focus-stats">' + statsHtml + '</div>' +
-      '</div>' +
-      todayHtml +
-      weekHtml +
-      groupsHtml;
-
-    // Wire up "open panel" affordances (calendar chips + today items + row CTAs)
-    container.querySelectorAll('[data-open-cid]').forEach(function(el){
-      el.addEventListener('click', function(ev){
-        ev.stopPropagation();
-        openPanel(el.getAttribute('data-open-cid'));
-      });
-    });
-  }
 
   function statCards(rows) {
     return rows.map(function(r){
