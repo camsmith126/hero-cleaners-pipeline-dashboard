@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260810T161809">
+<meta name="hc-build-id" content="20260810T163032">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1385,7 +1385,7 @@
     <h1>Hero Cleaners — Customer Pipeline</h1>
     <div class="subtitle">
       Phase 3 · click any card to log an action ·
-      generated 2026-08-10T16:10:05.612132 · snapshot date 2026-08-10 ·
+      generated 2026-08-10T16:21:32.789935 · snapshot date 2026-08-10 ·
       <a href="https://camsmith126.github.io/hero-cleaners-residential-dashboard/" style="color:#C5CBD3">← residential dashboard</a>
     </div>
   </div>
@@ -2037,28 +2037,10 @@
     } else if (cs === 2) {
       base = parseIsoDate(c.next_scheduled) || parseIsoDate(c.first_visit);
     } else if (cs === 4) {
-      // Cam 2026-07-19: first pitch attempt is the day AFTER the first
-      // clean. If Jaylee logged a "no answer" attempt, the next attempt
-      // is the day after THAT. Ladders forward, one call per day.
-      const attemptStages = new Set([
-        'recurring_pitch_attempt_1',
-        'recurring_pitch_attempt_2',
-        'recurring_pitch_attempt_3',
-      ]);
-      const attempts = (c.pipeline_actions || [])
-        .filter(function(a) { return attemptStages.has(a.stage_name); })
-        .sort(function(a, b) {
-          return (b.logged_at || '').localeCompare(a.logged_at || '');
-        });
-      if (attempts.length) {
-        // Day after the most recent attempt.
-        const d = parseIsoDate((attempts[0].logged_at || '').slice(0, 10));
-        if (d) { base = new Date(d); base.setDate(base.getDate() + 1); }
-      } else {
-        // No attempts yet — first pitch = day after first clean.
-        const fv = parseIsoDate(c.first_visit);
-        if (fv) { base = new Date(fv); base.setDate(base.getDate() + 1); }
-      }
+      // Day after the clean, then day after each attempt. Single source of
+      // truth in pitchDueDate() so the card's due-date and the calendar
+      // chip can never disagree (it already returns a Sunday-rolled date).
+      return pitchDueDate(c);
     }
     return rollSundayForward(base);
   }
@@ -2297,6 +2279,33 @@
     return ageDays < 7;
   }
 
+  // The recurring pitch ALWAYS lands the day AFTER the first clean (Cam's
+  // standing rule), or the day after the most recent attempt once she has
+  // started calling. Computed independently of current_stage — that is the
+  // whole point: with the Stage-3 gate a behind customer sits at cs===3,
+  // and actionDueDate's cs===3 branch returns the CLEAN DAY, which put
+  // "Log first clean" and "Recurring pitch" on the same day (Charmayne,
+  // cleaned 2026-08-10). Cam 2026-08-10.
+  function pitchDueDate(c) {
+    const attemptStages = new Set([
+      'recurring_pitch_attempt_1',
+      'recurring_pitch_attempt_2',
+      'recurring_pitch_attempt_3',
+    ]);
+    const attempts = (c.pipeline_actions || [])
+      .filter(function(a){ return attemptStages.has(a.stage_name); })
+      .sort(function(a, b){ return (b.logged_at || '').localeCompare(a.logged_at || ''); });
+    let base = null;
+    if (attempts.length) {
+      const d = parseIsoDate((attempts[0].logged_at || '').slice(0, 10));
+      if (d) { base = new Date(d); base.setDate(base.getDate() + 1); }
+    } else {
+      const fv = parseIsoDate(c.first_visit);
+      if (fv) { base = new Date(fv); base.setDate(base.getDate() + 1); }
+    }
+    return rollSundayForward(base);
+  }
+
   // Stage-4 work is live either when the classifier says cs===4, or when
   // Jaylee is behind: dual_task means the clean happened, the seed-planted
   // log is missing (so cs is pinned at 3) but the pitch is due anyway.
@@ -2461,7 +2470,7 @@
       // window that starts when Jaylee logs attempt-3 with text_sent=true —
       // classifier will auto-Lost them on day 8, no chip needed until then.
       if (pitchWorkLive(c) && !inStage4QuietWait(c) && !hasPitchTerminal(c)) {
-        const p = actionDueDate(c);
+        const p = pitchDueDate(c);
         // Overdue pitches FOLLOW TO TODAY until resolved (Cam 2026-07-24)
         // — same persistence pattern as onboarding calls. Without this,
         // an unresolved pitch (attempt logged, no Result picked) sat in a
