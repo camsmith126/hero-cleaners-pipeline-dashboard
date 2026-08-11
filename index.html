@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260811T153328">
+<meta name="hc-build-id" content="20260811T154454">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1500,10 +1500,22 @@
 
   // ---- 2026-07-18: cohort filter ------------------------------------
   // 2026-07-19 (Cam): cutoff shifted from 6/15 → 7/21 for a clean slate.
-  // Everyone who converted before this date is now on the Recurring Roster
-  // tab (Halee's 4-check-in flow lives there). The New pipeline is only
-  // for customers whose first_visit is on or after 7/21.
-  const COHORT_CUTOFF_ISO = '2026-07-21';
+  // 2026-08-10 (Cam): now a ROLLING 30-day window, not a fixed date. Cam
+  // believed it already was ("i think its 30 day rolling no?"); it was
+  // pinned at 7/21, so the "relevant" view silently widened every day —
+  // 20 days at the time, ~5 months by year-end.
+  //
+  // This window can only ever hide CLOSED records. Live pipeline work is
+  // exempt via the stage-1-4 clause in passes() below, so nobody can age
+  // out of Jaylee's queue mid-pitch (verified: New Customers = 14 at a 30,
+  // 60 and 90 day window). Anything that rolls past it lands in the
+  // "Earlier closed customers" archive, which is never window-filtered.
+  const COHORT_WINDOW_DAYS = 30;
+  function cohortCutoffIso() {
+    const d = new Date(todayDate());
+    d.setDate(d.getDate() - COHORT_WINDOW_DAYS);
+    return isoOf(d);
+  }
   const COHORT_LS_KEY     = 'hc:pipeline:v1:cohort';
   const COHORT = {
     mode: null,   // 'new' | 'all'
@@ -1519,6 +1531,13 @@
     },
     passes: function(c) {
       if (this.mode === 'all') return true;
+      return this.passesWindow(c);
+    },
+    // The window rules on their own, ignoring the All/New toggle. The closed
+    // archive asks this directly: "has this record rolled out of the 30-day
+    // view?" is a fact about the customer, not about which toggle Cam last
+    // clicked — otherwise flipping to All would empty the archive.
+    passesWindow: function(c) {
       if (!c) return false;
       // 2026-07-22 (audit): live pipeline work must never be hidden by the
       // cutoff. A customer still at stages 1-4 and not Lost has an open
@@ -1535,17 +1554,18 @@
       const ps = c.pipeline_stage || {};
       const cs = ps.current_stage;
       if (!ps.lost && !ps.one_off_track && !ps.pre_launch && typeof cs === 'number' && cs >= 1 && cs <= 4) return true;
+      const cutoff = cohortCutoffIso();
       const fv  = c.first_visit     ? String(c.first_visit).slice(0, 10)     : '';
       const frv = c.first_rec_visit ? String(c.first_rec_visit).slice(0, 10) : '';
       // Post-cutoff first visit → in cohort.
-      if (fv && fv >= COHORT_CUTOFF_ISO) return true;
+      if (fv && fv >= cutoff) return true;
       // 2026-07-19 (Cam): also include customers whose FIRST RECURRING
       // visit lands post-cutoff, even if their first clean was earlier.
       // These are new converts whose intro moment (Halee visits at first
       // recurring) is still upcoming — she needs visibility on them.
       // Excludes customers whose first_rec_visit already passed pre-cutoff
       // (that visit already happened; it's history, not new-convert work).
-      if (frv && frv >= COHORT_CUTOFF_ISO) return true;
+      if (frv && frv >= cutoff) return true;
       // No first_visit yet — brand-new customer whose first clean hasn't
       // happened. If they have an upcoming visit on the calendar, they're
       // new-cohort by definition.
@@ -2242,6 +2262,48 @@
     });
   }
 
+  // Closed archive (Cam 2026-08-10) — tracked-era customers who were worked
+  // through the process, reached an outcome, and have since rolled past the
+  // 30-day window. This is where Cam's question lands: "how will we keep the
+  // customers who pass that window."
+  //
+  // Nothing is deleted or moved when the window rolls. Every customer ships
+  // in CUSTOMERS on every build and their action history lives in Supabase
+  // customer_actions; the window is a DISPLAY filter over that. This section
+  // is the same data with the filter switched off, so an aged-out record
+  // stays one click away instead of only being reachable via the All toggle.
+  //
+  // Deliberately excludes pre_launch (they have no record to review — own
+  // section) and anyone still passing the window (they are current work).
+  function closedArchiveCohort() {
+    return CUSTOMERS.filter(function(c){
+      if (c.established || c.is_recurring) return false;
+      if (c.first_rec_visit) return false;      // roster lifecycle, not Jaylee's
+      const ps = c.pipeline_stage || {};
+      if (ps.pre_launch) return false;
+      const closed = !!(ps.lost || ps.one_off_track || ps.not_qualified);
+      if (!closed) return false;
+      return !COHORT.passesWindow(c);
+    }).sort(function(a, b){
+      return (b.last_visit || '').localeCompare(a.last_visit || '');
+    });
+  }
+
+  // What outcome did we land on, and when — read off the action log rather
+  // than the current classification, so it stays true after later rule
+  // changes (pipeline Lost moved 146 -> 77 in a single afternoon on 8/10).
+  function closedOutcomeOf(c) {
+    const ps = c.pipeline_stage || {};
+    const acts = (c.pipeline_actions || []).filter(function(a){
+      return a.stage_name === 'lost_outcome' || a.stage_name === 'recurring_pitch_won';
+    }).sort(function(x, y){ return (y.logged_at || '').localeCompare(x.logged_at || ''); });
+    const when = acts[0] && acts[0].logged_at ? acts[0].logged_at.slice(0, 10) : '';
+    if (ps.one_off_track)  return { label: 'Move out clean', tone: 'slate', when: when };
+    if (ps.not_qualified)  return { label: 'Not qualified',  tone: 'slate', when: when };
+    if (ps.lost)           return { label: 'Lost',           tone: 'red',   when: when };
+    return { label: '—', tone: 'slate', when: when };
+  }
+
   // Lost cohort — customers Jaylee worked and lost. Rendered below the active
   // New Customers grid so she has one place to review closed work.
   function lostCustomersCohort() {
@@ -2885,6 +2947,41 @@
       '</div>' +
       '<div class="roster-cards-wrap">' + lostCardsHtml + '</div>' +
 
+      // Closed archive (Cam 2026-08-10) — worked, categorized, and rolled
+      // past the 30-day window. Collapsed: reference, not a work queue.
+      (function(){
+        const closed = closedArchiveCohort();
+        const rows = closed.map(function(c){
+          const o = closedOutcomeOf(c);
+          const tone = o.tone === 'red'
+            ? 'background:#FEE2E2;color:#991B1B'
+            : 'background:#F1F5F9;color:#475569';
+          return '<tr class="roster-row" data-open-cid="' + esc(c.customer_id) + '" data-roster-kind="closed">' +
+            '<td><a href="#" onclick="event.preventDefault()"><strong>' + esc(c.display_name || '') + '</strong></a></td>' +
+            '<td><span class="checkin-status" style="' + tone + '">' + esc(o.label) + '</span></td>' +
+            '<td class="right">' + (Number(c.visits_total) || 0) + '</td>' +
+            '<td class="right">' + esc(fmtMoney(Number(c.ltv) || 0)) + '</td>' +
+            '<td>' + esc(c.last_visit ? fmtDateShort(c.last_visit) : '—') + '</td>' +
+            '<td>' + esc(o.when ? fmtDateShort(o.when) : '—') + '</td>' +
+          '</tr>';
+        }).join('');
+        return '<details class="prelaunch-block" style="margin-top:32px">' +
+          '<summary class="roster-section-head" style="cursor:pointer;list-style:revert">' +
+            'Earlier closed customers <span class="tab-count">' + closed.length + '</span>' +
+          '</summary>' +
+          '<div class="roster-section-help">' +
+            'Customers Jaylee worked to an outcome whose first clean is now more than ' + COHORT_WINDOW_DAYS + ' days old, ' +
+            'so they have rolled out of the sections above. Nothing was deleted — the full history and every logged ' +
+            'action is still on their card. <strong>These are the records that feed conversion stats</strong>, because ' +
+            'the outcome above was logged by a person on a date, not inferred from how much time has passed.' +
+          '</div>' +
+          '<div class="roster-table-wrap"><table class="roster-table">' +
+            '<thead><tr><th>Customer</th><th>Outcome</th><th>Cleans</th><th>Total spent</th><th>Last clean</th><th>Outcome logged</th></tr></thead>' +
+            '<tbody>' + (rows || '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted)">Nothing has rolled out of the window yet.</td></tr>') + '</tbody>' +
+          '</table></div>' +
+        '</details>';
+      })() +
+
       // Pre-launch history (Cam 2026-08-10). Collapsed by default — it is a
       // reference archive, not a work queue, and it is bigger than every
       // active section combined.
@@ -2934,8 +3031,8 @@
         openPanel(chip.getAttribute('data-open-cid'));
       });
     });
-    // Pre-launch archive rows open the same detail panel (2026-08-10).
-    container.querySelectorAll('.roster-row[data-roster-kind="prelaunch"]').forEach(function(row){
+    // Archive rows (pre-launch + closed) open the same detail panel.
+    container.querySelectorAll('.roster-row[data-roster-kind="prelaunch"], .roster-row[data-roster-kind="closed"]').forEach(function(row){
       row.addEventListener('click', function(){
         openPanel(row.getAttribute('data-open-cid'));
       });
