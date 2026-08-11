@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20260810T194606">
+<meta name="hc-build-id" content="20260810T194853">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -3239,8 +3239,8 @@
     // Per-section sort state (Cam 2026-07-22): Retained and Lost tables
     // sort independently. Each has its own localStorage key. Free-text
     // filter stays shared across all three sections.
-    const loadSort = function(key, defaultCol) {
-      let s = { col: defaultCol, dir: 'asc' };
+    const loadSort = function(key, defaultCol, defaultDir) {
+      let s = { col: defaultCol, dir: defaultDir || 'asc' };
       try {
         const stored = localStorage.getItem(key);
         if (stored) s = JSON.parse(stored);
@@ -3250,7 +3250,9 @@
     let retainedSort = loadSort(ROSTER_SORT_KEY, 'name');
     let lostSort     = loadSort(ROSTER_LOST_SORT_KEY, 'first_rec');  // == last_rec_visit column
     let gainedSort   = loadSort(ROSTER_GAINED_SORT_KEY, 'first_rec');
-    let repeatSort   = loadSort(ROSTER_REPEAT_SORT_KEY, 'cleans');
+    // Most-repeated first — the whole point of the section is who keeps
+    // coming back, so 7 cleans should not sort below 2.
+    let repeatSort   = loadSort(ROSTER_REPEAT_SORT_KEY, 'cleans', 'desc');
     let filter = '';
     try { filter = localStorage.getItem(ROSTER_FILTER_KEY) || ''; } catch (_) {}
 
