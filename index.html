@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20261022T163022">
+<meta name="hc-build-id" content="20261022T163137">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1385,7 +1385,7 @@
     <h1>Hero Cleaners — Customer Pipeline</h1>
     <div class="subtitle">
       Phase 3 · click any card to log an action ·
-      generated 2026-10-22T16:30:22.440677 · snapshot date 2026-10-22 ·
+      generated 2026-10-22T16:31:36.995086 · snapshot date 2026-10-22 ·
       <a href="https://camsmith126.github.io/hero-cleaners-residential-dashboard/" style="color:#C5CBD3">← residential dashboard</a>
     </div>
   </div>
@@ -1517,6 +1517,8 @@
     return isoOf(d);
   }
   const COHORT_LS_KEY     = 'hc:pipeline:v1:cohort';
+  // Pipeline tracking start (single source: classify.PIPELINE_TRACKING_START).
+  const PIPELINE_TRACKING_START_ISO = '2026-06-15';
   const COHORT = {
     mode: null,   // 'new' | 'all'
     setMode: function(m) {
