@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20261023T112111">
+<meta name="hc-build-id" content="20261023T112348">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -3735,6 +3735,34 @@
       if (frv < wkStart || frv > windowEnd) return;
       byDayFirstRecDone[daysBetween(frv, wkStart)].push(c);
     });
+    // Scheduled-clean chips for Halee's converts (Cam 2026-10-23): every
+    // clean AFTER the first recurring visit, for customers still in the New
+    // Recurring group (through their check-ins), drawn on its own date as a
+    // static, informational chip — teal while scheduled, ✓ once done,
+    // struck-through if cancelled. Never a task, never moves. Lets Halee see
+    // the clean a check-in pill follows. Retained customers are excluded so
+    // the calendar doesn't fill with the whole roster's weekly cleans.
+    // (The first recurring visit itself is already covered by the stage-5
+    // chip above and the ✓ First recurring chip.)
+    const byDayCleans = days.map(function(){ return []; });
+    newConverts.forEach(function(c){
+      const ps = c.pipeline_stage || {};
+      if (ps.lost || ps.current_stage === 'Lost') return;
+      const frvIso = (c.first_rec_visit || '').slice(0, 10);
+      if (!frvIso) return;
+      (c.calendar_visits || []).forEach(function(v){
+        const vIso = (v.date || '').slice(0, 10);
+        if (!vIso || vIso <= frvIso) return;
+        const vd = parseIsoDate(vIso);
+        if (!vd || vd < wkStart || vd > windowEnd) return;
+        let state = (v.status === 'done') ? 'done' : 'sched';
+        if (state !== 'done') {
+          if (evAppliesTo(evCancelByCust[c.customer_id], vd)) state = 'canceled';
+          else if (evAppliesTo(evCompleteByCust[c.customer_id], vd)) state = 'done';
+        }
+        byDayCleans[daysBetween(vd, wkStart)].push({c: c, state: state, jobType: v.job_type});
+      });
+    });
     // Second check-in pills (Cam 2026-07-22): pinned to the scheduled clean
     // closest to but never before first_rec_visit + 30 days. Target date is
     // computed server-side (extract_daily._compute_second_checkin_targets);
@@ -3817,6 +3845,16 @@
           const chipLabel = '✓ First recurring · ' + first;
           return '<div class="cal-chip visit clean-done" data-open-cid="' + esc(c.customer_id) + '" ' +
                  'title="' + esc(chipLabel + ' — completed; customer is on the roster') + '">' +
+                 esc(chipLabel) + '</div>';
+        }).join('') +
+        byDayCleans[dayIdx].map(function(e){
+          const first = (e.c.display_name || 'customer').split(/\s+/)[0];
+          const base = 'Clean · ' + first;
+          const chipLabel = (e.state === 'done' ? '✓ ' : '') + base;
+          const kind = 'visit' + (e.state === 'done' ? ' clean-done' : (e.state === 'canceled' ? ' clean-canceled' : ''));
+          const tip = e.state === 'done' ? ' — completed' : (e.state === 'canceled' ? ' — cancelled in HCP' : ' — scheduled (informational)');
+          return '<div class="cal-chip ' + kind + '" data-open-cid="' + esc(e.c.customer_id) + '" ' +
+                 'title="' + esc(chipLabel + (e.jobType ? ' (' + e.jobType + ')' : '') + tip) + '">' +
                  esc(chipLabel) + '</div>';
         }).join('') +
         byDayCheckin1[dayIdx].map(function(c){
