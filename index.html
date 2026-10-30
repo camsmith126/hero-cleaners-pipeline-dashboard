@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20261030T122613">
+<meta name="hc-build-id" content="20261030T123033">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -359,6 +359,15 @@
     background: #F9FAFB; border-left: 3px solid var(--slate);
     color: var(--text-muted); font-size: 12px; border-radius: 4px;
   }
+  .lost-reason-card { border:1px solid #F3C7C7; background:#FFF7F7; border-radius:10px; padding:12px 14px; margin:0 0 14px; }
+  .lost-reason-card .lrc-head { display:flex; justify-content:space-between; align-items:baseline; gap:10px; margin-bottom:8px; }
+  .lost-reason-card .lrc-title { font-weight:700; color:#9C2A2A; }
+  .lost-reason-card .lrc-stage { font-size:12px; color:var(--text-muted); }
+  .lost-reason-card .lrc-row { display:grid; grid-template-columns:110px 1fr; gap:8px; align-items:start; margin:6px 0; }
+  .lost-reason-card label { font-size:12px; color:var(--text-muted); padding-top:6px; }
+  .lost-reason-card select, .lost-reason-card textarea { width:100%; font:inherit; padding:6px 8px; border:1px solid #E5E7EB; border-radius:6px; background:#fff; }
+  .lost-reason-card .lrc-foot { display:flex; justify-content:space-between; align-items:center; margin-top:8px; }
+  .lost-reason-card .lrc-when { font-size:11px; color:var(--text-muted); }
   .checkin-card {
     border: 1px solid var(--border); border-radius: 8px;
     background: #fff; margin-bottom: 12px; overflow: hidden;
@@ -3561,6 +3570,10 @@
     // show the cancellation reason when Jaylee recorded one, so we can
     // look back at WHY customers leave.
     const lostReasonOf = function(c){
+      // Prefer Jaylee's recorded lost_outcome (any stage); fall back to the
+      // legacy cancellations-table reason mirrored into state_reason.
+      const lo = latestActionFor(c, 'lost_outcome');
+      if (lo && lo.event_data && lo.event_data.reason) return allReasonLabel(lo.event_data.reason);
       const sr = c.state_reason || '';
       const m = sr.match(/Cancellation:\s*(.+)/);
       return m ? m[1].trim() : '';
@@ -4300,6 +4313,100 @@
 
   // 2026-07-19: Roster check-in panel. Same slide-in shell as openPanel
   // but renders 4 check-in cards instead of the pipeline stage cards.
+  // ---- "Why did they cancel?" (Cam 2026-10-30) -------------------------
+  // Every Lost customer gets ONE place to record the reason, whatever stage
+  // they were lost at — pitch, first/second check-in, or after Retained
+  // (Kenzee Willis). 33 of 54 ever-recurring churns had no reason on file;
+  // the stage-4 form was the only entry point. Writes a `lost_outcome`
+  // action (latest wins; classifier already treats it as explicit lost and
+  // keeps the check-in-stage pin for converts). Shows on both panels.
+  const CANCEL_REASONS = [
+    ['pricing',            'Pricing / too expensive'],
+    ['moved',              'Moved'],
+    ['do_it_themselves',   'Decided to do it themselves'],
+    ['taking_a_break',     'Taking a break (may return)'],
+    ['unhappy_with_clean', 'Unhappy with the clean'],
+    ['scheduling',         'Scheduling / time didn\'t work'],
+    ['cleaner_issue',      'Cleaner change / consistency'],
+    ['life_event',         'Life event (health, family, finances)'],
+    ['unreachable',        'Stopped responding'],
+    ['other',              'Other (see notes)']
+  ];
+  function isLostCustomer(c) {
+    const ps = c.pipeline_stage || {};
+    return !!(ps.lost || ps.current_stage === 'Lost' || c.state === 'Lost' || c.state === 'Paused');
+  }
+  function lostStageLabel(c) {
+    const ps = c.pipeline_stage || {};
+    const n = ps.lost_stage;
+    if (!n) return 'stage not recorded';
+    if (n === 8) return 'after Retained (completed both check-ins)';
+    const sm = STAGE_META.find(function(m){ return m.n === n; });
+    return sm ? ('stage ' + n + ' · ' + sm.label) : ('stage ' + n);
+  }
+  const SYSTEM_LOST_LABELS = [
+    ['cancelled_at_first_check_in',   'Cancelled at 1st check-in'],
+    ['cancelled_at_second_check_in',  'Cancelled at 2nd check-in'],
+    ['no_response_after_3_followups', 'No response after 3 follow-ups'],
+    ['Pending follow-up',             'Pending follow-up (legacy)']
+  ];
+  function allReasonLabel(code) {
+    const hit = CANCEL_REASONS.concat(LOST_REASONS, SYSTEM_LOST_LABELS).find(function(o){ return o[0] === code; });
+    return hit ? hit[1] : (code || '');
+  }
+  function lostReasonCardHtml(c) {
+    if (!isLostCustomer(c)) return '';
+    const prior = latestActionFor(c, 'lost_outcome');
+    const d = (prior && prior.event_data) || {};
+    const sel = d.reason || '';
+    const known = CANCEL_REASONS.some(function(o){ return o[0] === sel; });
+    const opts = ['<option value="">— select a reason —</option>'].concat(
+      CANCEL_REASONS.map(function(o){
+        return '<option value="' + esc(o[0]) + '"' + (sel === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>';
+      }),
+      (sel && !known) ? ['<option value="' + esc(sel) + '" selected>' + esc(allReasonLabel(sel)) + '</option>'] : []
+    ).join('');
+    const when = prior ? ('Recorded ' + fmtLogged(prior)) : 'No reason on file yet';
+    return '<div class="lost-reason-card" data-lost-reason-card="1">' +
+      '<div class="lrc-head"><span class="lrc-title">✕ Why did they cancel?</span>' +
+        '<span class="lrc-stage">Lost at ' + esc(lostStageLabel(c)) + '</span></div>' +
+      '<div class="lrc-row"><label>Reason</label><select data-lr-reason>' + opts + '</select></div>' +
+      '<div class="lrc-row"><label>What happened</label>' +
+        '<textarea data-lr-notes rows="3" placeholder="What did they say? What was going on? Anything we could have done?">' + esc(d.notes || '') + '</textarea></div>' +
+      '<div class="lrc-foot"><span class="lrc-when">' + esc(when) + '</span>' +
+        '<button type="button" class="stage-save" data-lr-save>Save reason</button></div>' +
+    '</div>';
+  }
+  function wireLostReasonCard(c, afterSave) {
+    const card = bodyEl.querySelector('[data-lost-reason-card]');
+    if (!card) return;
+    const btn = card.querySelector('[data-lr-save]');
+    btn.addEventListener('click', async function(){
+      if (!requireIdentity()) { toast('Pick who you are first — top-right of the dashboard.', true); return; }
+      const reason = card.querySelector('[data-lr-reason]').value;
+      const notes  = card.querySelector('[data-lr-notes]').value.trim();
+      if (!reason && !notes) { toast('Pick a reason or write a note first.', true); return; }
+      btn.disabled = true; btn.textContent = 'Saving…';
+      try {
+        const ps = c.pipeline_stage || {};
+        const ev = { reason: reason || 'other', notes: notes || null, lost_stage: ps.lost_stage || null, source: 'cancellation_reason' };
+        const resp = await sb('customer_actions', {
+          method: 'POST',
+          body: JSON.stringify({ customer_id: c.customer_id, stage_name: 'lost_outcome', event_data: ev, logged_by: loggedBy() })
+        });
+        mirrorActionLocally(c, 'lost_outcome', ev, Array.isArray(resp) ? resp[0] : null);
+        advanceStageLocally(c, 'lost_outcome');
+        toast('Saved — cancellation reason recorded for ' + (c.display_name || 'customer') + '.');
+        if (typeof afterSave === 'function') afterSave();
+        renderTab();
+      } catch (err) {
+        console.error(err);
+        toast('Save failed — ' + err.message, true);
+        btn.disabled = false; btn.textContent = 'Save reason';
+      }
+    });
+  }
+
   function openRosterPanel(customer_id, focusStep) {
     const c = CUST_BY_ID[customer_id];
     if (!c) return;
@@ -4342,6 +4449,7 @@
 
     const cards = [1,2,3,4].map(function(step){ return renderCheckinCard(c, step); }).join('');
     bodyEl.innerHTML =
+      lostReasonCardHtml(c) +
       '<div class="roster-panel-intro">' +
         'Halee\'s 4 check-ins. Each has up to 3 attempts (like Jaylee\'s recurring pitch). ' +
         'Log the conversation summary once you reach them.' +
@@ -4349,6 +4457,7 @@
       cards;
 
     wireRosterPanel();
+    wireLostReasonCard(c, renderRosterPanel);
 
     // Optional: scroll to the focused step if opened via a check-in box click.
     if (CURRENT.focusStep) {
@@ -4797,10 +4906,11 @@
       return renderStageCard(c, sm.n, sm.label, sm.owner);
     }).join('');
 
-    bodyEl.innerHTML = '<div class="all-stages">' + cardsHtml + '</div>';
+    bodyEl.innerHTML = lostReasonCardHtml(c) + '<div class="all-stages">' + cardsHtml + '</div>';
 
     // Wire per-card interactions (Edit buttons, save/cancel, dirty tracking)
     wireStageCards();
+    wireLostReasonCard(c, function(){ renderPanel({}); });
 
     // Footer: single Close button now — per-card Save buttons handle writes.
     saveBtn.style.display = 'none';
@@ -5840,6 +5950,10 @@
     // the stage the customer was lost at, and a logged decline is by
     // definition a stage-4 death).
     if (actionName === 'lost_outcome') {
+      // 2026-10-30 (Cam): recording a cancellation reason on an ALREADY
+      // lost customer must not move the ✕ — keep the classifier's pin
+      // (check-in stage / Retained). Only a fresh pitch decline pins at 4.
+      if (ps.lost && ps.lost_stage) { ps.explicit_lost = true; return; }
       stages[4] = 'lost';
       ps.lost = true;
       ps.lost_stage = 4;
