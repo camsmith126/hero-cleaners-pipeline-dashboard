@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 2026-07-18: build ID + cache-control. See freshness watchdog below. -->
-<meta name="hc-build-id" content="20261030T123033">
+<meta name="hc-build-id" content="20261030T123922">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1503,6 +1503,42 @@
   const CUSTOMERS = JSON.parse(document.getElementById('pipelineCustomers').textContent);
   const STAGE_META = JSON.parse(document.getElementById('pipelineStageMeta').textContent);
   const SB = JSON.parse(document.getElementById('pipelineSbConfig').textContent);
+
+  // Reason vocabularies + label lookup, defined up front: renderTab() runs at
+  // load (Roster is Halee's default tab) and its Lost rows need these.
+  // (2026-10-30: they lived further down and the Roster tab rendered blank
+  // on first paint — temporal-dead-zone ReferenceError.)
+  const LOST_REASONS = [
+    ['declined_price',           'Declined — price'],
+    ['declined_timing',          'Declined — timing'],
+    ['prefers_other',            'Prefers another provider'],
+    ['not_a_fit',                'Not a fit'],
+    ['unreachable',              'Unreachable after 3 attempts'],
+    ['cancelled_first_clean',    'Cancelled first clean'],
+    ['other',                    'Other (see notes)']
+  ];
+  const CANCEL_REASONS = [
+    ['pricing',            'Pricing / too expensive'],
+    ['moved',              'Moved'],
+    ['do_it_themselves',   'Decided to do it themselves'],
+    ['taking_a_break',     'Taking a break (may return)'],
+    ['unhappy_with_clean', 'Unhappy with the clean'],
+    ['scheduling',         'Scheduling / time didn\'t work'],
+    ['cleaner_issue',      'Cleaner change / consistency'],
+    ['life_event',         'Life event (health, family, finances)'],
+    ['unreachable',        'Stopped responding'],
+    ['other',              'Other (see notes)']
+  ];
+  const SYSTEM_LOST_LABELS = [
+    ['cancelled_at_first_check_in',   'Cancelled at 1st check-in'],
+    ['cancelled_at_second_check_in',  'Cancelled at 2nd check-in'],
+    ['no_response_after_3_followups', 'No response after 3 follow-ups'],
+    ['Pending follow-up',             'Pending follow-up (legacy)']
+  ];
+  function allReasonLabel(code) {
+    const hit = CANCEL_REASONS.concat(LOST_REASONS, SYSTEM_LOST_LABELS).find(function(o){ return o[0] === code; });
+    return hit ? hit[1] : (code || '');
+  }
 
   const CUST_BY_ID = Object.create(null);
   for (const c of CUSTOMERS) CUST_BY_ID[c.customer_id] = c;
@@ -4320,18 +4356,6 @@
   // the stage-4 form was the only entry point. Writes a `lost_outcome`
   // action (latest wins; classifier already treats it as explicit lost and
   // keeps the check-in-stage pin for converts). Shows on both panels.
-  const CANCEL_REASONS = [
-    ['pricing',            'Pricing / too expensive'],
-    ['moved',              'Moved'],
-    ['do_it_themselves',   'Decided to do it themselves'],
-    ['taking_a_break',     'Taking a break (may return)'],
-    ['unhappy_with_clean', 'Unhappy with the clean'],
-    ['scheduling',         'Scheduling / time didn\'t work'],
-    ['cleaner_issue',      'Cleaner change / consistency'],
-    ['life_event',         'Life event (health, family, finances)'],
-    ['unreachable',        'Stopped responding'],
-    ['other',              'Other (see notes)']
-  ];
   function isLostCustomer(c) {
     const ps = c.pipeline_stage || {};
     return !!(ps.lost || ps.current_stage === 'Lost' || c.state === 'Lost' || c.state === 'Paused');
@@ -4343,16 +4367,6 @@
     if (n === 8) return 'after Retained (completed both check-ins)';
     const sm = STAGE_META.find(function(m){ return m.n === n; });
     return sm ? ('stage ' + n + ' · ' + sm.label) : ('stage ' + n);
-  }
-  const SYSTEM_LOST_LABELS = [
-    ['cancelled_at_first_check_in',   'Cancelled at 1st check-in'],
-    ['cancelled_at_second_check_in',  'Cancelled at 2nd check-in'],
-    ['no_response_after_3_followups', 'No response after 3 follow-ups'],
-    ['Pending follow-up',             'Pending follow-up (legacy)']
-  ];
-  function allReasonLabel(code) {
-    const hit = CANCEL_REASONS.concat(LOST_REASONS, SYSTEM_LOST_LABELS).find(function(o){ return o[0] === code; });
-    return hit ? hit[1] : (code || '');
   }
   function lostReasonCardHtml(c) {
     if (!isLostCustomer(c)) return '';
@@ -5190,15 +5204,6 @@
   // pitched, the attempts tracker closes — the remaining rows show "Not
   // needed" instead of highlighting the next attempt. Same behavior after
   // 3 attempts even if none reached.
-  const LOST_REASONS = [
-    ['declined_price',           'Declined — price'],
-    ['declined_timing',          'Declined — timing'],
-    ['prefers_other',            'Prefers another provider'],
-    ['not_a_fit',                'Not a fit'],
-    ['unreachable',              'Unreachable after 3 attempts'],
-    ['cancelled_first_clean',    'Cancelled first clean'],
-    ['other',                    'Other (see notes)']
-  ];
   const FREQ_OPTIONS_INTERNAL = [
     ['weekly',    'Weekly'],
     ['bi-weekly', 'Bi-weekly'],
